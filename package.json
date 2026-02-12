@@ -1,0 +1,23 @@
+{
+  "name": "okon-agent",
+  "version": "1.0.0",
+  "description": "",
+  "packageManager": "pnpm@8.7.5",
+  "type": "module",
+  "main": "./src/index.js",
+  "scripts": {
+    "ask": "node ./src/index.js"
+  },
+  "dependencies": {
+    "@ai-sdk/deepseek": "^2.0.19",
+    "ai": "^6.0.83",
+    "dotenv": "^16.4.7",
+    "ink": "^5.2.1",
+    "ink-text-input": "^6.0.0",
+    "react": "^18.3.1",
+    "zod": "^4.3.6"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC"
+}
