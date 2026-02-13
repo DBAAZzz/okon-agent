@@ -2,8 +2,9 @@ import 'dotenv/config';
 import React, { useState } from 'react';
 import { render, Box, Text, useApp } from 'ink';
 import TextInput from 'ink-text-input';
-import { streamText } from 'ai';
+import { stepCountIs, streamText } from 'ai';
 import { createDeepSeek } from '@ai-sdk/deepseek';
+import { calculatorTool, weatherTool, getOutdoorActivitiesTool } from './tools/index.js';
 
 const apiKey = process.env.DEEPSEEK_API_KEY;
 if (!apiKey) {
@@ -40,6 +41,13 @@ function App() {
     }
 
     setError('');
+    const modelMessages = [
+      ...messages
+        .filter((message) => message.content !== '')
+        .map((message) => ({ role: message.role, content: message.content })),
+      { role: 'user', content: prompt }
+    ];
+
     setIsLoading(true);
     setMessages((prev) => [
       ...prev,
@@ -51,7 +59,18 @@ function App() {
       try {
         const result = streamText({
           model: deepseek('deepseek-chat'),
-          prompt
+          messages: modelMessages,
+          system: '灵活使用工具回答，目前有：计算器和获取温度工具',
+          tools: {
+            calculator: calculatorTool,
+            weather: weatherTool,
+            getOutdoorActivities: getOutdoorActivitiesTool
+          },
+          // toolChoice: { "type": "tool", "toolName": "calculator" },
+          stopWhen: stepCountIs(5),
+          onStepFinish: (result) => {
+            console.log("最终结果：", result?.content)
+          }
         });
 
         for await (const chunk of result.textStream) {
