@@ -1,5 +1,8 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import { createLogger } from '../logger.js';
+
+const logger = createLogger('tool-calculator');
 
 /**
  * strict 严格模式
@@ -13,9 +16,9 @@ export const calculatorTool = tool({
     a: z.number().describe('计算的数值1'),
     b: z.number().describe('计算的数值2')
   }),
-  execute: async ({ a, b }) => {
-    console.log("调用自定义计算器tool")
-    console.log("计算两数之和参数：", { a, b })
+  execute: async ({ a, b }: { a: number; b: number }) => {
+    logger.info('调用自定义计算器tool');
+    logger.info('计算两数之和参数', { a, b });
     return { result: a + b };
   }
 });

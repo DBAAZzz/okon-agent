@@ -1,9 +1,12 @@
 import { tool } from 'ai';
 import { z } from 'zod';
+import { createLogger } from '../logger.js';
 
-const CONDITIONS = ['sunny', 'cloudy', 'rainy', 'windy', 'snowy', 'foggy'];
+const CONDITIONS = ['sunny', 'cloudy', 'rainy', 'windy', 'snowy', 'foggy'] as const;
+const logger = createLogger('tool-weather');
+type Condition = (typeof CONDITIONS)[number];
 
-function randomInt(min, max) {
+function randomInt(min: number, max: number): number {
   return Math.floor(Math.random() * (max - min + 1)) + min;
 }
 
@@ -12,8 +15,9 @@ export const weatherTool = tool({
   inputSchema: z.object({
     location: z.string().describe('获取天气的地点')
   }),
+  needsApproval: true,
   execute: async ({ location }) => {
-    console.log('获取地区温度参数：', { location });
+    logger.info('获取地区温度参数', { location });
     const temperature = randomInt(-10, 40);
     const conditions = CONDITIONS[randomInt(0, CONDITIONS.length - 1)];
     const humidity = randomInt(20, 95);
@@ -30,7 +34,12 @@ export const getOutdoorActivitiesTool = tool({
     conditions: z.enum(CONDITIONS),
     humidity: z.number().min(0).max(100).optional()
   }),
-  execute: async ({ location, temperature, conditions, humidity }) => {
+  execute: async ({ location, temperature, conditions, humidity }: {
+    location?: string;
+    temperature: number;
+    conditions: Condition;
+    humidity?: number;
+  }) => {
     const base = {
       location: location ?? 'unknown',
       conditions,
