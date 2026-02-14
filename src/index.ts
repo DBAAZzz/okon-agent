@@ -5,6 +5,7 @@ import TextInput from 'ink-text-input';
 import { streamToolAgent } from './tool-agent.js';
 import { formatLogEntry, getLogs, subscribeLogs, type LogEntry } from './logger.js';
 import type { ModelMessage, ToolApprovalResponse } from 'ai';
+import type { ToolAgentRunOptions } from './tool-agent.js';
 
 type DisplayMessage = {
   role: 'user' | 'assistant';
@@ -49,6 +50,30 @@ function isDenyInput(value: string): boolean {
   return ['n', 'no', 'deny', 'denied', '拒绝'].includes(value);
 }
 
+function getLatestUserText(history: ModelMessage[]): string {
+  for (let i = history.length - 1; i >= 0; i -= 1) {
+    const message = history[i];
+    if (!message || message.role !== 'user') {
+      continue;
+    }
+
+    if (typeof message.content === 'string') {
+      return message.content;
+    }
+  }
+
+  return '';
+}
+
+function resolveRunOptions(history: ModelMessage[]): ToolAgentRunOptions {
+  const latestUserText = getLatestUserText(history).toLowerCase();
+  const forceCalculator =
+    latestUserText.includes('calculator') ||
+    (latestUserText.includes('计算') && /\d+\s*[\+\-\*\/]\s*\d+/.test(latestUserText));
+
+  return { forceCalculator };
+}
+
 function App() {
   const { exit } = useApp();
   const [input, setInput] = useState('');
@@ -69,7 +94,7 @@ function App() {
 
   const runAgentTurn = async (history: ModelMessage[]) => {
     try {
-      const result = await streamToolAgent(history);
+      const result = await streamToolAgent(history, resolveRunOptions(history));
 
       for await (const chunk of result.textStream) {
         setMessages((prev) => {

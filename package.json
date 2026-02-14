@@ -7,7 +7,8 @@
   "main": "./src/index.ts",
   "scripts": {
     "ask": "tsx ./src/index.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "eval": "tsx ./scripts/eval.ts"
   },
   "dependencies": {
     "@ai-sdk/deepseek": "^2.0.19",
