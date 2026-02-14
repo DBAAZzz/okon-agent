@@ -1,0 +1,17 @@
+{
+  "name": "@okon/shared",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "ai": "^6.0.83"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}

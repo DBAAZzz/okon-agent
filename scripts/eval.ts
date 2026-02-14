@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ModelMessage, ToolApprovalResponse } from 'ai';
-import { streamToolAgent } from '../src/tool-agent.js';
+import { streamToolAgent } from '../packages/agent/src/agent/tool-agent.js';
 
 type CheckName =
   | 'calculator_tool_called'

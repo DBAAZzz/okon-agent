@@ -1,6 +1,6 @@
 import { tool } from 'ai';
 import { z } from 'zod';
-import { createLogger } from '../logger.js';
+import { createLogger } from '@okon/shared';
 
 const CONDITIONS = ['sunny', 'cloudy', 'rainy', 'windy', 'snowy', 'foggy'] as const;
 const logger = createLogger('tool-weather');
