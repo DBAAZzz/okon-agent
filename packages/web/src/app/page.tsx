@@ -1,9 +1,5 @@
-import { ChatInterface } from '@/components/ChatInterface';
+import { redirect } from 'next/navigation';
 
 export default function Home() {
-  return (
-    <main className="h-screen w-screen">
-      <ChatInterface />
-    </main>
-  );
+  redirect('/loan-match');
 }

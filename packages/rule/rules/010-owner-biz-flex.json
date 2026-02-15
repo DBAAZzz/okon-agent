@@ -1,0 +1,37 @@
+{
+  "id": "loan.product.owner-biz-flex",
+  "name": "小微经营灵活贷",
+  "institution": "新网银行",
+  "amountRange": [50000, 500000],
+  "termRange": [6, 24],
+  "rateRange": [9.5, 18.0],
+  "repaymentMethods": ["随借随还", "先息后本", "等本等息"],
+  "rules": {
+    "minAge": 23,
+    "maxAge": 60,
+    "maxAgeFemale": 55,
+    "allowedCities": ["成都", "重庆", "广州", "武汉", "苏州"],
+    "requireMainlandHukou": true,
+    "allowedIdentities": ["个体户", "企业主"],
+    "minEducation": "高中以下",
+    "minSalary": 8000,
+    "requireBizLicense": true,
+    "minBizAge": 12,
+    "maxQueryCount1M": 3,
+    "maxQueryCount2M": 6,
+    "maxQueryCount3M": 9,
+    "maxQueryCount6M": 15,
+    "noCurrentOverdue": true,
+    "maxCreditUsage": 0.9,
+    "maxCreditCards": 12,
+    "maxUnsettledCreditLoans": 6,
+    "maxInstitutions": 8,
+    "maxNonBankInstitutions": 4,
+    "maxTotalCreditLimit": 300
+  },
+  "fullRuleText": "面向个体户/企业主，需大陆户籍并持有营业执照满12个月，月收入不低于8000。征信近1个月查询<=3、近2个月<=6、近3个月<=9、近6个月<=15，当前无逾期，信用卡使用率<=90%，贷款机构数<=8且非银机构<=4，总授信<=300万（录入为300万对应300万/万=300）。",
+  "bonuses": {
+    "hasProperty": "额度上浮30%",
+    "hasGJJ": "利率下调0.3%"
+  }
+}

@@ -3,6 +3,10 @@ import Fastify from 'fastify';
 import { registerMiddlewares } from './middlewares/index.js';
 import { sessionManager } from './agent/session-manager.js';
 import { streamToolAgent } from './agent/tool-agent.js';
+import {
+  extractStructuredPdfInputSchema,
+  streamStructuredPdfData
+} from './agent/pdf-structured-extractor.js';
 import { createLogger } from '@okon/shared';
 
 const logger = createLogger('server');
@@ -14,6 +18,17 @@ const fastify = Fastify({
   }
 });
 
+function setSseHeaders(reply: any) {
+  reply.raw.setHeader('Content-Type', 'text/event-stream');
+  reply.raw.setHeader('Cache-Control', 'no-cache');
+  reply.raw.setHeader('Connection', 'keep-alive');
+  reply.raw.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+}
+
+function writeSseEvent(reply: any, event: unknown) {
+  reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+}
+
 // Register middlewares
 await registerMiddlewares(fastify);
 
@@ -23,11 +38,7 @@ async function streamAgentResponse(
   reply: any,
   addUserMessage?: string
 ) {
-  // Set SSE headers
-  reply.raw.setHeader('Content-Type', 'text/event-stream');
-  reply.raw.setHeader('Cache-Control', 'no-cache');
-  reply.raw.setHeader('Connection', 'keep-alive');
-  reply.raw.setHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+  setSseHeaders(reply);
 
   // Add user message if provided
   if (addUserMessage) {
@@ -43,8 +54,7 @@ async function streamAgentResponse(
 
     // Stream text chunks
     for await (const chunk of result.textStream) {
-      const data = JSON.stringify({ type: 'text', data: chunk });
-      reply.raw.write(`data: ${data}\n\n`);
+      writeSseEvent(reply, { type: 'text', data: chunk });
     }
 
     // Get final content
@@ -72,23 +82,20 @@ async function streamAgentResponse(
       }));
 
       sessionManager.setPendingApprovals(sessionId, approvalData as any);
-      const data = JSON.stringify({ type: 'approval', data: approvalData });
-      reply.raw.write(`data: ${data}\n\n`);
+      writeSseEvent(reply, { type: 'approval', data: approvalData });
       logger.info('发送审批请求', { sessionId, count: approvals.length });
     }
 
     // Send completion event
-    const doneData = JSON.stringify({ type: 'done' });
-    reply.raw.write(`data: ${doneData}\n\n`);
+    writeSseEvent(reply, { type: 'done' });
 
     logger.info('SSE 流式响应完成', { sessionId });
   } catch (error) {
     logger.error('SSE 流式响应错误', error);
-    const errorData = JSON.stringify({
+    writeSseEvent(reply, {
       type: 'error',
       data: error instanceof Error ? error.message : 'Unknown error'
     });
-    reply.raw.write(`data: ${errorData}\n\n`);
   } finally {
     reply.raw.end();
   }
@@ -120,6 +127,42 @@ fastify.get('/api/chat/continue', async (request, reply) => {
   await streamAgentResponse(sessionId, reply);
 });
 
+fastify.post('/api/pdf/extract-structured/stream', async (request, reply) => {
+  const parsed = extractStructuredPdfInputSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    reply.code(400);
+    return {
+      error: 'INVALID_INPUT',
+      details: parsed.error.issues
+    };
+  }
+
+  setSseHeaders(reply);
+  writeSseEvent(reply, { type: 'start' });
+
+  try {
+    const result = await streamStructuredPdfData(parsed.data, {
+      onStatus: async (status) => {
+        writeSseEvent(reply, { type: 'status', data: status });
+      },
+      onPartial: async (partial) => {
+        writeSseEvent(reply, { type: 'partial', data: partial });
+      }
+    });
+
+    writeSseEvent(reply, { type: 'result', data: result });
+    writeSseEvent(reply, { type: 'done' });
+  } catch (error) {
+    logger.error('PDF 结构化 SSE 失败', error);
+    writeSseEvent(reply, {
+      type: 'error',
+      data: error instanceof Error ? error.message : 'Unknown error'
+    });
+  } finally {
+    reply.raw.end();
+  }
+});
+
 // Health check
 fastify.get('/health', async () => {
   return { status: 'ok', sessions: sessionManager.getSessionCount() };
@@ -136,6 +179,7 @@ try {
   console.log(`📊 Health check: http://localhost:${PORT}/health`);
   console.log(`🔌 tRPC endpoint: http://localhost:${PORT}/trpc`);
   console.log(`📡 SSE endpoint: http://localhost:${PORT}/api/chat/stream`);
+  console.log(`📄 PDF SSE endpoint: http://localhost:${PORT}/api/pdf/extract-structured/stream`);
 } catch (err) {
   logger.error('服务器启动失败', err);
   process.exit(1);

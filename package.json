@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "pnpm --parallel --stream dev",
     "dev:agent": "pnpm --filter @okon/agent dev",
+    "dev:api": "pnpm --filter @okon/api dev",
     "dev:web": "pnpm --filter @okon/web dev",
     "build": "pnpm --recursive --stream build",
     "typecheck": "pnpm --recursive typecheck",

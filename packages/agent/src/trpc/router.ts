@@ -2,6 +2,11 @@ import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import type { Context } from './context.js';
 import { sessionManager } from '../agent/session-manager.js';
+import {
+  extractStructuredPdfData,
+  extractStructuredPdfInputSchema,
+  structuredPdfExtractionResultSchema
+} from '../agent/pdf-structured-extractor.js';
 
 const t = initTRPC.context<Context>().create();
 
@@ -9,6 +14,15 @@ export const router = t.router;
 export const publicProcedure = t.procedure;
 
 export const appRouter = router({
+  pdf: router({
+    extractStructured: publicProcedure
+      .input(extractStructuredPdfInputSchema)
+      .output(structuredPdfExtractionResultSchema)
+      .mutation(async ({ input }) => {
+        return extractStructuredPdfData(input);
+      })
+  }),
+
   chat: router({
     // 获取会话历史
     getHistory: publicProcedure

@@ -1,0 +1,25 @@
+{
+  "name": "@okon/rule",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "files": [
+    "src",
+    "rules"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit --tsBuildInfoFile /tmp/okon-rule.tsbuildinfo && tsc --noEmit -p tsconfig.test.json --tsBuildInfoFile /tmp/okon-rule-test.tsbuildinfo",
+    "test": "tsx --test tests/*.test.ts"
+  },
+  "dependencies": {
+    "fastify-plugin": "^5.1.0"
+  },
+  "peerDependencies": {
+    "fastify": "^5.2.0"
+  },
+  "devDependencies": {
+    "fastify": "^5.2.0"
+  }
+}
