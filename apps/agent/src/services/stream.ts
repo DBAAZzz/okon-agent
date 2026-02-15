@@ -1,26 +1,16 @@
-import 'dotenv/config';
-import Fastify from 'fastify';
-import { registerMiddlewares } from './middlewares/index.js';
-import { sessionManager } from './agent/session-manager.js';
-import { streamToolAgent } from './agent/tool-agent.js';
+import type { FastifyReply } from 'fastify';
+import { sessionManager } from '../agent/session-manager.js';
+import { streamToolAgent } from '../agent/tool-agent.js';
 import { createLogger } from '@okon/shared';
 
-const logger = createLogger('server');
+const logger = createLogger('stream-service');
 
-const fastify = Fastify({
-  logger: false, // Use our custom logger instead
-  routerOptions: {
-    maxParamLength: 5000
-  }
-});
-
-// Register middlewares
-await registerMiddlewares(fastify);
-
-// Helper function to stream agent response
-async function streamAgentResponse(
+/**
+ * Stream agent response via SSE
+ */
+export async function streamAgentResponse(
   sessionId: string,
-  reply: any,
+  reply: FastifyReply,
   addUserMessage?: string
 ) {
   // Set SSE headers
@@ -92,51 +82,4 @@ async function streamAgentResponse(
   } finally {
     reply.raw.end();
   }
-}
-
-// SSE endpoint for streaming chat (new messages)
-fastify.get('/api/chat/stream', async (request, reply) => {
-  const { sessionId, message } = request.query as { sessionId?: string; message?: string };
-
-  if (!sessionId || !message) {
-    reply.code(400).send({ error: 'Missing sessionId or message' });
-    return;
-  }
-
-  logger.info('开始 SSE 流式响应（新消息）', { sessionId, message });
-  await streamAgentResponse(sessionId, reply, message);
-});
-
-// SSE endpoint for continuing after approval
-fastify.get('/api/chat/continue', async (request, reply) => {
-  const { sessionId } = request.query as { sessionId?: string };
-
-  if (!sessionId) {
-    reply.code(400).send({ error: 'Missing sessionId' });
-    return;
-  }
-
-  logger.info('继续 SSE 流式响应（审批后）', { sessionId });
-  await streamAgentResponse(sessionId, reply);
-});
-
-// Health check
-fastify.get('/health', async () => {
-  return { status: 'ok', sessions: sessionManager.getSessionCount() };
-});
-
-// Start server
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3001;
-const HOST = process.env.HOST || '0.0.0.0';
-
-try {
-  await fastify.listen({ port: PORT, host: HOST });
-  logger.info(`服务器启动成功`, { port: PORT, host: HOST });
-  console.log(`✨ Agent server running at http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🔌 tRPC endpoint: http://localhost:${PORT}/trpc`);
-  console.log(`📡 SSE endpoint: http://localhost:${PORT}/api/chat/stream`);
-} catch (err) {
-  logger.error('服务器启动失败', err);
-  process.exit(1);
 }

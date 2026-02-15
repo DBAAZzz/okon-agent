@@ -2,7 +2,7 @@ import 'dotenv/config';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import type { ModelMessage, ToolApprovalResponse } from 'ai';
-import { streamToolAgent } from '../packages/agent/src/agent/tool-agent.js';
+import { streamToolAgent } from '../src/agent/tool-agent.js';
 
 type CheckName =
   | 'calculator_tool_called'
@@ -82,7 +82,7 @@ async function runTurn(history: ModelMessage[]): Promise<TurnResult> {
 }
 
 async function loadCases(): Promise<EvalCase[]> {
-  const filePath = resolve(process.cwd(), 'evals/cases.json');
+  const filePath = resolve(import.meta.dirname, '../evals/cases.json');
   const raw = await readFile(filePath, 'utf-8');
   const suite = JSON.parse(raw) as EvalSuite;
   return suite.cases;

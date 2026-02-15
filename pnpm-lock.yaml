@@ -18,7 +18,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/agent:
+  apps/agent:
     dependencies:
       '@ai-sdk/deepseek':
         specifier: ^2.0.19
@@ -31,7 +31,7 @@ importers:
         version: 10.1.0
       '@okon/shared':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../../packages/shared
       '@trpc/server':
         specifier: ^11.0.0
         version: 11.10.0(typescript@5.9.3)
@@ -58,21 +58,11 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/shared:
-    dependencies:
-      ai:
-        specifier: ^6.0.83
-        version: 6.0.83(zod@4.3.6)
-    devDependencies:
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-
-  packages/web:
+  apps/web:
     dependencies:
       '@okon/shared':
         specifier: workspace:*
-        version: link:../shared
+        version: link:../../packages/shared
       '@trpc/client':
         specifier: ^11.0.0
         version: 11.10.0(@trpc/server@11.10.0)(typescript@5.9.3)
@@ -107,6 +97,16 @@ importers:
       tailwindcss:
         specifier: ^3.4.17
         version: 3.4.19(tsx@4.21.0)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  packages/shared:
+    dependencies:
+      ai:
+        specifier: ^6.0.83
+        version: 6.0.83(zod@4.3.6)
+    devDependencies:
       typescript:
         specifier: ^5.9.3
         version: 5.9.3
