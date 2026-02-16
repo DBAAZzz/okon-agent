@@ -1,23 +1,20 @@
 {
-  "name": "okon-agent",
+  "name": "okon-agent-monorepo",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI Agent with Fastify + tRPC + Next.js",
   "packageManager": "pnpm@8.7.5",
-  "type": "module",
-  "main": "./src/index.js",
+  "private": true,
   "scripts": {
-    "ask": "node ./src/index.js"
+    "dev": "pnpm --parallel --stream dev",
+    "dev:agent": "pnpm --filter @okon/agent dev",
+    "dev:web": "pnpm --filter @okon/web dev",
+    "build": "pnpm --filter @okon/shared build && pnpm --filter @okon/agent... --filter @okon/web... build",
+    "typecheck": "pnpm --recursive --stream typecheck",
+    "eval": "tsx apps/agent/scripts/eval.ts"
   },
-  "dependencies": {
-    "@ai-sdk/deepseek": "^2.0.19",
-    "ai": "^6.0.83",
-    "dotenv": "^16.4.7",
-    "ink": "^5.2.1",
-    "ink-text-input": "^6.0.0",
-    "react": "^18.3.1",
-    "zod": "^4.3.6"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "devDependencies": {
+    "@types/node": "^25.2.3",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.3"
+  }
 }
