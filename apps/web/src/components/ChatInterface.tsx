@@ -1,22 +1,21 @@
 'use client';
 
-import { useMemo, useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useSSEStream } from '@/hooks/useSSEStream';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { ApprovalRequest } from './ApprovalRequest';
 import { trpc } from '@/lib/trpc';
+import type { Message } from '@/hooks/useSSEStream';
 
-export function ChatInterface() {
-  const sessionId = useMemo(() => crypto.randomUUID(), []);
-  const [mounted, setMounted] = useState(false);
+type Props = {
+  sessionId: string;
+};
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
-
+export function ChatInterface({ sessionId }: Props) {
   const {
     messages,
+    setMessages,
     pendingApprovals,
     isStreaming,
     error,
@@ -25,7 +24,44 @@ export function ChatInterface() {
     setPendingApprovals
   } = useSSEStream(sessionId);
 
-  const handleApproval = async (approvalId: string, approved: boolean) => {
+  // 切换会话时从 DB 加载历史消息
+  useEffect(() => {
+    let cancelled = false;
+    async function loadHistory() {
+      try {
+        const { history } = await trpc.chat.getHistory.query({ sessionId });
+        if (cancelled) return;
+        // 将 DB 中的 ModelMessage 转为前端 Message 格式
+        const msgs: Message[] = [];
+        for (const msg of history) {
+          const m = msg as any;
+          if (m.role === 'user' && typeof m.content === 'string') {
+            msgs.push({ role: 'user', content: m.content });
+          } else if (m.role === 'assistant') {
+            // assistant content 可能是数组或字符串
+            const text = Array.isArray(m.content)
+              ? m.content
+                  .filter((p: any) => p.type === 'text')
+                  .map((p: any) => p.text)
+                  .join('')
+              : typeof m.content === 'string'
+                ? m.content
+                : '';
+            if (text) {
+              msgs.push({ role: 'assistant', content: text });
+            }
+          }
+        }
+        setMessages(msgs);
+      } catch (err) {
+        console.error('Failed to load history:', err);
+      }
+    }
+    loadHistory();
+    return () => { cancelled = true; };
+  }, [sessionId, setMessages]);
+
+  const handleApproval = useCallback(async (approvalId: string, approved: boolean) => {
     try {
       const result = await trpc.approval.respond.mutate({
         sessionId,
@@ -34,7 +70,6 @@ export function ChatInterface() {
         reason: approved ? 'User approved in web UI' : 'User denied in web UI'
       });
 
-      // Continue receiving agent response via SSE
       if (result.shouldContinue) {
         continueAfterApproval();
       }
@@ -42,18 +77,10 @@ export function ChatInterface() {
       console.error('Failed to respond to approval:', err);
       alert('审批响应失败，请重试');
     }
-  };
+  }, [sessionId, continueAfterApproval]);
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
-      {/* Header */}
-      <div className="bg-blue-600 text-white p-4 shadow-md">
-        <h1 className="text-xl font-bold">Okon Agent</h1>
-        {mounted && (
-          <p className="text-sm opacity-90">会话 ID: {sessionId.slice(0, 8)}</p>
-        )}
-      </div>
-
       {/* Messages */}
       <MessageList messages={messages} />
 

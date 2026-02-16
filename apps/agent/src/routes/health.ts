@@ -8,7 +8,7 @@ export async function registerHealthRoutes(fastify: FastifyInstance) {
   fastify.get('/health', async () => {
     return {
       status: 'ok',
-      sessions: sessionManager.getSessionCount()
+      sessions: await sessionManager.getSessionCount()
     };
   });
 }

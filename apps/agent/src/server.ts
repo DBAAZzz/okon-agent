@@ -2,6 +2,8 @@ import 'dotenv/config';
 import Fastify from 'fastify';
 import { registerMiddlewares } from './middlewares/index.js';
 import { registerRoutes } from './routes/index.js';
+import { initSessionManager } from './agent/session-manager.js';
+import { initMemory } from './capabilities/memory/index.js';
 import { createLogger } from '@okon/shared';
 
 const logger = createLogger('server');
@@ -13,6 +15,16 @@ const fastify = Fastify({
     maxParamLength: 5000
   }
 });
+
+// Register plugins
+await fastify.register(import('./plugins/prisma.js'));
+await fastify.register(import('./plugins/qdrant.js'));
+
+// Initialize session manager with prisma
+initSessionManager(fastify.prisma);
+
+// Initialize memory store with qdrant
+initMemory(fastify.qdrant);
 
 // Register middlewares
 await registerMiddlewares(fastify);

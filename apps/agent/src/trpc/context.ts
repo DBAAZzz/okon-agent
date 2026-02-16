@@ -1,7 +1,14 @@
-import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify';
+import type { CreateFastifyContextOptions } from '@trpc/server/adapters/fastify'
+import { createEmbeddings, type Embeddings } from '../capabilities/embeddings/index.js'
+import '../plugins/qdrant.js'
+import '../plugins/prisma.js'
+
+let _embeddings: Embeddings | null = null
 
 export function createContext({ req, res }: CreateFastifyContextOptions) {
-  return { req, res };
+  const qdrant = req.server.qdrant
+  const embeddings = (_embeddings ??= createEmbeddings(qdrant))
+  return { req, res, qdrant, embeddings }
 }
 
-export type Context = Awaited<ReturnType<typeof createContext>>;
+export type Context = Awaited<ReturnType<typeof createContext>>
