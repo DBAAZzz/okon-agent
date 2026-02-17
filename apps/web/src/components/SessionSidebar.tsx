@@ -57,39 +57,42 @@ export function SessionSidebar({ currentSessionId, onSelectSession, onNewSession
   };
 
   return (
-    <div className="w-64 bg-gray-900 text-white flex flex-col h-full">
+    <aside className="w-72 max-w-[46vw] md:max-w-none h-full shrink-0 border-r border-[var(--line-soft)] bg-[linear-gradient(160deg,#1b2839_0%,#22364d_60%,#294666_100%)] text-[#f4f0e7] flex flex-col">
       {/* New session button */}
       <button
         onClick={handleNew}
-        className="m-3 p-2 border border-gray-600 rounded-lg hover:bg-gray-700 transition text-sm"
+        className="m-4 mt-5 rounded-2xl border border-[#f2c07866] bg-[#f2c07814] px-4 py-3 text-sm tracking-wide text-[#f7e5c2] hover:bg-[#f2c07824] transition"
       >
         + 新建会话
       </button>
 
       {/* Session list */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="px-4 pb-2 text-[11px] uppercase tracking-[0.24em] text-[#cfdae8]">
+        Sessions
+      </div>
+      <div className="flex-1 overflow-y-auto px-2 pb-3">
         {sessions.map(session => (
           <div
             key={session.id}
             onClick={() => onSelectSession(session.id)}
-            className={`group flex items-center justify-between px-3 py-2 mx-2 rounded cursor-pointer text-sm truncate ${
+            className={`group mb-1.5 flex items-center justify-between rounded-xl px-3 py-2.5 cursor-pointer text-sm transition-all ${
               currentSessionId === session.id
-                ? 'bg-gray-700'
-                : 'hover:bg-gray-800'
+                ? 'bg-[#f2c07826] text-[#fff2d5] shadow-[inset_0_0_0_1px_rgba(242,192,120,0.34)]'
+                : 'text-[#d8e3ef] hover:bg-[#f2c07814] hover:text-[#fff2d5]'
             }`}
           >
-            <span className="truncate">
+            <span className="truncate pr-2">
               {session.title || session.id.slice(0, 8)}
             </span>
             <button
               onClick={(e) => handleDelete(e, session.id)}
-              className="hidden group-hover:block text-gray-400 hover:text-red-400 ml-2 shrink-0"
+              className="hidden group-hover:block text-[#f5d9c8] hover:text-[#ffb3a0] ml-2 shrink-0"
             >
               ✕
             </button>
           </div>
         ))}
       </div>
-    </div>
+    </aside>
   );
 }

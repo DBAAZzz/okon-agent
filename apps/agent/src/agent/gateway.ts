@@ -1,90 +1,104 @@
-import { stepCountIs, ToolLoopAgent } from 'ai'
-import type { StreamEvent, ApprovalRequestPart } from '@okon/shared'
+import type { ModelMessage } from 'ai'
+import type { StreamEvent } from '@okon/shared'
 import { createLogger } from '@okon/shared'
-import { modelRegistry } from './models/index.js'
 import { adaptStream } from './events/index.js'
+import { collectApprovalRequests } from './approval/index.js'
+import { createAgent, DEFAULT_MODEL } from './factory.js'
 import { sessionManager } from './session-manager.js'
 import { memoryStore } from '../capabilities/memory/index.js'
 import { buildSystemPrompt } from './prompt.js'
-import {
-  weatherTool,
-  getOutdoorActivitiesTool,
-  ipLookupTool,
-} from '../tools/index.js'
 
 const logger = createLogger('agent-gateway')
 
-const DEFAULT_MODEL = 'deepseek-chat'
-
-const tools = {
-  weather: weatherTool,
-  getOutdoorActivities: getOutdoorActivitiesTool,
-  ipLookup: ipLookupTool,
-}
-
-function createAgent(modelId: string, instructions: string) {
-  const model = modelRegistry.get(modelId)
-  return new ToolLoopAgent({
-    model,
-    instructions,
-    tools,
-    stopWhen: stepCountIs(5),
-  })
+/** runAgent 的返回值 */
+export type AgentStreamResult = {
+  /** ToolLoopAgent.stream() 的返回值 */
+  result: any
+  modelId: string
+  userMessage?: string
 }
 
 /**
- * 发送新消息并流式返回事件
+ * 准备并启动 agent 流 — 共用的编排逻辑
+ * 存用户消息 → 取历史 → 搜记忆 → 建 prompt → 创建 agent → 启动 stream
  */
-export async function* chat(
-  sessionId: string,
-  message: string,
-): AsyncGenerator<StreamEvent> {
-  // 1. 存用户消息
-  await sessionManager.addMessage(sessionId, {
-    role: 'user',
-    content: message,
-  })
+export async function runAgent(sessionId: string, userMessage?: string): Promise<AgentStreamResult> {
+  if (userMessage) {
+    await sessionManager.addMessage(sessionId, { role: 'user', content: userMessage })
+  }
 
-  // 2. 获取 session 信息（含 model）
   const session = await sessionManager.getOrCreate(sessionId)
   const modelId = (session as any).model || DEFAULT_MODEL
-
-  // 3. 获取历史 + 搜索记忆 + 创建 agent + stream
   const history = await sessionManager.getHistory(sessionId)
-  const memories = await memoryStore.search(message, { sessionId }, 3)
-  logger.info("查询到的memories有：", memories)
+
+  const memories = userMessage
+    ? await memoryStore.search(userMessage, { sessionId }, 3)
+    : []
+  if (memories.length) {
+    logger.info('查询到的 memories', { count: memories.length })
+  }
+
   const instructions = buildSystemPrompt({
     memories: memories.map((m) => m.content),
   })
   const agent = createAgent(modelId, instructions)
 
-  logger.info('开始流式响应', { sessionId, model: modelId })
+  logger.info('启动 agent stream', { sessionId, model: modelId })
   const result = await agent.stream({ messages: history })
 
-  // 4. 适配 fullStream → StreamEvent
-  const pendingApprovals: ApprovalRequestPart[] = []
+  return { result, modelId, userMessage }
+}
 
-  for await (const event of adaptStream(result.fullStream)) {
-    // 收集审批请求，交给 sessionManager 管理
-    if (event.type === 'approval_request') {
-      pendingApprovals.push(...event.approvals)
-      sessionManager.setPendingApprovals(sessionId, pendingApprovals)
-    }
-    if (event.type === 'done') {
-      logger.info('chat完成，可以进行记忆操作')
-    }
+/**
+ * 流结束后的收尾
+ * - 有待审批：暂存消息到内存，不写数据库（避免历史中出现无 tool-result 的 tool-call）
+ * - 无待审批：持久化消息 + 异步存记忆
+ */
+export async function finalizeStream(
+  sessionId: string,
+  agentStream: AgentStreamResult,
+): Promise<void> {
+  const response = await agentStream.result.response
+  logger.info("finalizeStream节点查看response", response)
+  const approvals = collectApprovalRequests(response.messages as ModelMessage[])
+
+  if (approvals.length > 0) {
+    // 审批中断：暂存消息，等审批完成后由下一次 finalizeStream 持久化
+    sessionManager.setPendingMessages(sessionId, response.messages)
+    sessionManager.setPendingApprovals(sessionId, approvals)
+    logger.info('stream 因审批中断，消息已暂存', { sessionId, approvals: approvals.length })
+    return
+  }
+
+  // 正常完成：持久化消息
+  sessionManager.clearPendingApprovals(sessionId)
+  await sessionManager.addMessages(sessionId, response.messages)
+
+  if (agentStream.userMessage) {
+    memoryStore.storeConversation(agentStream.userMessage, response.messages, { sessionId }).catch((err) => {
+      logger.error('记忆存储失败', err)
+    })
+  }
+
+  logger.info('stream 收尾完成', { sessionId })
+}
+
+// ─── SSE 格式的流式接口（GET 端点使用） ───
+
+/**
+ * 发送新消息并流式返回 StreamEvent
+ */
+export async function* chat(
+  sessionId: string,
+  message: string,
+): AsyncGenerator<StreamEvent> {
+  const agentStream = await runAgent(sessionId, message)
+
+  for await (const event of adaptStream(agentStream.result.fullStream)) {
     yield event
   }
 
-  // 5. 流结束后存 assistant 消息 + 异步存储记忆
-  const response = await result.response
-  await sessionManager.addMessages(sessionId, response.messages)
-
-  memoryStore.storeConversation(message, response.messages, { sessionId }).catch((err) => {
-    logger.error('记忆存储失败', err)
-  })
-
-  logger.info('流式响应完成', { sessionId })
+  await finalizeStream(sessionId, agentStream)
 }
 
 /**
@@ -93,28 +107,11 @@ export async function* chat(
 export async function* continueAfterApproval(
   sessionId: string,
 ): AsyncGenerator<StreamEvent> {
-  const session = await sessionManager.getOrCreate(sessionId)
-  const modelId = (session as any).model || DEFAULT_MODEL
+  const agentStream = await runAgent(sessionId)
 
-  const history = await sessionManager.getHistory(sessionId)
-  const instructions = buildSystemPrompt()
-  const agent = createAgent(modelId, instructions)
-
-  logger.info('审批后继续', { sessionId, model: modelId })
-  const result = await agent.stream({ messages: history })
-
-  const pendingApprovals: ApprovalRequestPart[] = []
-
-  for await (const event of adaptStream(result.fullStream)) {
-    if (event.type === 'approval_request') {
-      pendingApprovals.push(...event.approvals)
-      sessionManager.setPendingApprovals(sessionId, pendingApprovals)
-    }
+  for await (const event of adaptStream(agentStream.result.fullStream)) {
     yield event
   }
 
-  const response = await result.response
-  await sessionManager.addMessages(sessionId, response.messages)
-
-  logger.info('继续响应完成', { sessionId })
+  await finalizeStream(sessionId, agentStream)
 }

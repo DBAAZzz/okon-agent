@@ -26,21 +26,21 @@ export function MessageInput({
   };
 
   return (
-    <div className="border-t border-gray-300 p-4 bg-white">
-      <div className="flex gap-2">
+    <div className="border-t border-[var(--line-soft)] bg-[rgba(255,255,255,0.72)] p-3 md:p-4">
+      <div className="rounded-2xl border border-[var(--line-soft)] bg-white/90 p-2 shadow-[0_16px_35px_-24px_rgba(20,35,58,0.5)] backdrop-blur-sm flex gap-2">
         <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
           placeholder={disabled ? '请先处理审批请求...' : '输入消息... (Enter 发送, Shift+Enter 换行)'}
-          className="flex-1 border border-gray-300 rounded-lg px-4 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none disabled:bg-gray-100 disabled:cursor-not-allowed"
-          rows={3}
+          className="flex-1 rounded-xl bg-transparent px-3 py-2 text-[15px] text-[var(--ink-1)] placeholder:text-[var(--ink-2)]/70 focus:outline-none resize-none disabled:cursor-not-allowed"
+          rows={2}
         />
         <button
           onClick={handleSend}
           disabled={!input.trim() || disabled}
-          className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
+          className="self-end rounded-xl px-5 py-2.5 bg-[var(--brand)] text-white text-sm font-semibold tracking-wide hover:bg-[var(--brand-strong)] disabled:bg-slate-300 disabled:cursor-not-allowed transition-colors"
         >
           发送
         </button>

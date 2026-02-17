@@ -8,6 +8,8 @@ const logger = createLogger('session-manager');
 export class SessionManager {
   /** pendingApprovals 是临时状态，不需要持久化 */
   private pendingApprovals = new Map<string, ApprovalRequestPart[]>();
+  /** 审批中断时暂存的 agent 响应消息，等审批完成后再持久化 */
+  private pendingMessages = new Map<string, ModelMessage[]>();
 
   constructor(private prisma: PrismaClient) {}
 
@@ -28,7 +30,7 @@ export class SessionManager {
     const since = new Date(Date.now() - windowMinutes * 60_000);
     const messages = await this.prisma.message.findMany({
       where: { sessionId, createdAt: { gte: since } },
-      orderBy: { createdAt: 'desc' },
+      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
       take: limit,
     });
     return messages.reverse().map((m) => m.content as unknown as ModelMessage);
@@ -47,12 +49,17 @@ export class SessionManager {
   }
 
   async addMessages(sessionId: string, messages: ModelMessage[]): Promise<void> {
+    if (messages.length === 0) return;
+
     await this.getOrCreate(sessionId);
+    const baseTime = Date.now();
     await this.prisma.message.createMany({
-      data: messages.map((m) => ({
+      data: messages.map((m, index) => ({
         sessionId,
         role: m.role,
         content: m as any,
+        // ensure deterministic ordering for multi-message batches
+        createdAt: new Date(baseTime + index),
       })),
     });
     logger.debug('添加多条消息到历史', { sessionId, count: messages.length });
@@ -70,6 +77,19 @@ export class SessionManager {
   clearPendingApprovals(sessionId: string): void {
     this.pendingApprovals.delete(sessionId);
     logger.debug('清除待审批请求', { sessionId });
+  }
+
+  /** 暂存审批中断时的 agent 响应消息 */
+  setPendingMessages(sessionId: string, messages: ModelMessage[]): void {
+    this.pendingMessages.set(sessionId, messages);
+    logger.debug('暂存待审批消息', { sessionId, count: messages.length });
+  }
+
+  /** 取出并清除暂存的消息 */
+  takePendingMessages(sessionId: string): ModelMessage[] {
+    const messages = this.pendingMessages.get(sessionId) || [];
+    this.pendingMessages.delete(sessionId);
+    return messages;
   }
 
   async handleApproval(
@@ -99,8 +119,17 @@ export class SessionManager {
       content: [response],
     });
 
-    this.clearPendingApprovals(sessionId);
-    logger.info('审批响应已添加到历史，等待继续执行', { sessionId });
+    const remaining = approvals.filter((a) => a.approvalId !== approvalId);
+    if (remaining.length > 0) {
+      this.pendingApprovals.set(sessionId, remaining);
+    } else {
+      this.clearPendingApprovals(sessionId);
+    }
+
+    logger.info('审批响应已添加到历史，等待继续执行', {
+      sessionId,
+      remainingApprovals: remaining.length,
+    });
   }
 
   async deleteSession(sessionId: string): Promise<boolean> {
