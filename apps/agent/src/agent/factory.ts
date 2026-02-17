@@ -1,5 +1,6 @@
 import { stepCountIs, ToolLoopAgent } from 'ai'
 import { modelRegistry } from './models/index.js'
+import { buildSubagentTools } from './subagent/index.js'
 import {
   weatherTool,
   getOutdoorActivitiesTool,
@@ -8,18 +9,17 @@ import {
 
 export const DEFAULT_MODEL = 'deepseek-chat'
 
-const tools = {
-  weather: weatherTool,
-  getOutdoorActivities: getOutdoorActivitiesTool,
-  ipLookup: ipLookupTool,
-}
-
 export function createAgent(modelId: string, instructions: string) {
   const model = modelRegistry.get(modelId)
   return new ToolLoopAgent({
     model,
     instructions,
-    tools,
+    tools: {
+      weather: weatherTool,
+      getOutdoorActivities: getOutdoorActivitiesTool,
+      ipLookup: ipLookupTool,
+      ...buildSubagentTools(modelId),
+    },
     stopWhen: stepCountIs(5),
   })
 }

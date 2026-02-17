@@ -59,7 +59,6 @@ export async function finalizeStream(
   agentStream: AgentStreamResult,
 ): Promise<void> {
   const response = await agentStream.result.response
-  logger.info("finalizeStream节点查看response", response)
   const approvals = collectApprovalRequests(response.messages as ModelMessage[])
 
   if (approvals.length > 0) {
