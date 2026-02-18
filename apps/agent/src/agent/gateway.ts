@@ -18,29 +18,45 @@ export type AgentStreamResult = {
   userMessage?: string
 }
 
+export type RunAgentOptions = {
+  historyLimit?: number
+}
+
 /**
  * 准备并启动 agent 流 — 共用的编排逻辑
  * 存用户消息 → 取历史 → 搜记忆 → 建 prompt → 创建 agent → 启动 stream
  */
-export async function runAgent(sessionId: string, userMessage?: string): Promise<AgentStreamResult> {
+export async function runAgent(
+  sessionId: string,
+  userMessage?: string,
+  options: RunAgentOptions = {},
+): Promise<AgentStreamResult> {
   if (userMessage) {
     await sessionManager.addMessage(sessionId, { role: 'user', content: userMessage })
   }
 
   const session = await sessionManager.getOrCreate(sessionId)
   const modelId = (session as any).model || DEFAULT_MODEL
-  const history = await sessionManager.getHistory(sessionId)
+  let history: ModelMessage[] = []
+
+  if ((options.historyLimit ?? 20) <= 0) {
+    if (userMessage) {
+      history = [{ role: 'user', content: userMessage }]
+    }
+  } else if (options.historyLimit) {
+    history = await sessionManager.getHistory(sessionId, options.historyLimit)
+  } else {
+    history = await sessionManager.getHistory(sessionId)
+  }
 
   const memories = userMessage
-    ? await memoryStore.search(userMessage, { sessionId }, 3)
+    ? await memoryStore.recent({ sessionId }, 3)
     : []
-  if (memories.length) {
-    logger.info('查询到的 memories', { count: memories.length })
-  }
 
   const instructions = buildSystemPrompt({
     memories: memories.map((m) => m.content),
   })
+
   const agent = createAgent(modelId, instructions)
 
   logger.info('启动 agent stream', { sessionId, model: modelId })

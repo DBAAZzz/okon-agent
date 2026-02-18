@@ -7,12 +7,37 @@ datasource db {
 }
 
 model Session {
-  id        String    @id @default(cuid())
-  title     String?
-  model     String    @default("deepseek-chat")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  messages  Message[]
+  id              String           @id @default(cuid())
+  title           String?
+  model           String           @default("deepseek-chat")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  messages        Message[]
+  channelMappings ChannelMapping[]
+}
+
+model ChannelConfig {
+  id        String           @id @default(cuid())
+  platform  String           @unique // MVP: 每平台一个配置
+  name      String
+  enabled   Boolean          @default(true)
+  config    Json             // 平台凭证，如 { appId, appSecret }
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  mappings  ChannelMapping[]
+}
+
+model ChannelMapping {
+  id              String        @id @default(cuid())
+  channelConfigId String
+  channelConfig   ChannelConfig @relation(fields: [channelConfigId], references: [id], onDelete: Cascade)
+  externalChatId  String
+  sessionId       String
+  session         Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([channelConfigId, externalChatId])
+  @@index([sessionId])
 }
 
 model Message {

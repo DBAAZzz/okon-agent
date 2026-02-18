@@ -1,5 +1,6 @@
 'use client';
 
+import Link from 'next/link';
 import { useState, useEffect, useCallback } from 'react';
 import { trpc } from '@/lib/trpc';
 
@@ -58,6 +59,15 @@ export function SessionSidebar({ currentSessionId, onSelectSession, onNewSession
 
   return (
     <aside className="w-72 max-w-[46vw] md:max-w-none h-full shrink-0 border-r border-[var(--line-soft)] bg-[linear-gradient(160deg,#1b2839_0%,#22364d_60%,#294666_100%)] text-[#f4f0e7] flex flex-col">
+      <div className="m-4 mt-5 mb-0">
+        <Link
+          href="/channel"
+          className="block w-full rounded-2xl border border-[#8ec7d266] bg-[#8ec7d218] px-4 py-3 text-center text-sm tracking-wide text-[#d8f1ff] hover:bg-[#8ec7d228] transition"
+        >
+          Channel 配置
+        </Link>
+      </div>
+
       {/* New session button */}
       <button
         onClick={handleNew}
