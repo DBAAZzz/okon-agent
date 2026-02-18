@@ -3,7 +3,7 @@ import type { StreamEvent } from '@okon/shared'
 import { createLogger } from '@okon/shared'
 import { adaptStream } from './events/index.js'
 import { collectApprovalRequests } from './approval/index.js'
-import { createAgent, DEFAULT_MODEL } from './factory.js'
+import { createAgentWithCredentials } from './factory.js'
 import { sessionManager } from './session-manager.js'
 import { memoryStore } from '../capabilities/memory/index.js'
 import { buildSystemPrompt } from './prompt.js'
@@ -20,6 +20,14 @@ export type AgentStreamResult = {
 
 export type RunAgentOptions = {
   historyLimit?: number
+  /** Bot 配置：provider、model、systemPrompt、以及可选的自定义凭证 */
+  bot: {
+    provider: string
+    model: string
+    systemPrompt?: string | null
+    apiKey?: string | null
+    baseURL?: string | null
+  }
 }
 
 /**
@@ -28,15 +36,21 @@ export type RunAgentOptions = {
  */
 export async function runAgent(
   sessionId: string,
-  userMessage?: string,
-  options: RunAgentOptions = {},
+  userMessage: string | undefined,
+  options: RunAgentOptions,
 ): Promise<AgentStreamResult> {
   if (userMessage) {
-    await sessionManager.addMessage(sessionId, { role: 'user', content: userMessage })
+    await sessionManager.addMessage(sessionId, {
+      role: 'user',
+      content: userMessage,
+    })
   }
 
-  const session = await sessionManager.getOrCreate(sessionId)
-  const modelId = (session as any).model || DEFAULT_MODEL
+  await sessionManager.getOrCreate(sessionId)
+  if (!options.bot) {
+    throw new Error('Bot configuration is required')
+  }
+  const modelId = options.bot.model
   let history: ModelMessage[] = []
 
   if ((options.historyLimit ?? 20) <= 0) {
@@ -49,15 +63,19 @@ export async function runAgent(
     history = await sessionManager.getHistory(sessionId)
   }
 
-  const memories = userMessage
-    ? await memoryStore.recent({ sessionId }, 3)
-    : []
+  const memories = userMessage ? await memoryStore.recent({ sessionId }, 3) : []
 
   const instructions = buildSystemPrompt({
     memories: memories.map((m) => m.content),
+    botPrompt: options.bot?.systemPrompt ?? undefined,
   })
 
-  const agent = createAgent(modelId, instructions)
+  const credentials: { apiKey: string; baseURL?: string } = {
+    apiKey: options.bot.apiKey ?? '',
+  }
+  if (options.bot.baseURL) credentials.baseURL = options.bot.baseURL
+
+  const agent = createAgentWithCredentials(options.bot.provider, modelId, instructions, credentials)
 
   logger.info('启动 agent stream', { sessionId, model: modelId })
   const result = await agent.stream({ messages: history })
@@ -81,7 +99,10 @@ export async function finalizeStream(
     // 审批中断：暂存消息，等审批完成后由下一次 finalizeStream 持久化
     sessionManager.setPendingMessages(sessionId, response.messages)
     sessionManager.setPendingApprovals(sessionId, approvals)
-    logger.info('stream 因审批中断，消息已暂存', { sessionId, approvals: approvals.length })
+    logger.info('stream 因审批中断，消息已暂存', {
+      sessionId,
+      approvals: approvals.length,
+    })
     return
   }
 
@@ -90,9 +111,13 @@ export async function finalizeStream(
   await sessionManager.addMessages(sessionId, response.messages)
 
   if (agentStream.userMessage) {
-    memoryStore.storeConversation(agentStream.userMessage, response.messages, { sessionId }).catch((err) => {
-      logger.error('记忆存储失败', err)
-    })
+    memoryStore
+      .storeConversation(agentStream.userMessage, response.messages, {
+        sessionId,
+      })
+      .catch((err) => {
+        logger.error('记忆存储失败', err)
+      })
   }
 
   logger.info('stream 收尾完成', { sessionId })
@@ -106,8 +131,9 @@ export async function finalizeStream(
 export async function* chat(
   sessionId: string,
   message: string,
+  options: RunAgentOptions,
 ): AsyncGenerator<StreamEvent> {
-  const agentStream = await runAgent(sessionId, message)
+  const agentStream = await runAgent(sessionId, message, options)
 
   for await (const event of adaptStream(agentStream.result.fullStream)) {
     yield event
@@ -121,8 +147,9 @@ export async function* chat(
  */
 export async function* continueAfterApproval(
   sessionId: string,
+  options: RunAgentOptions,
 ): AsyncGenerator<StreamEvent> {
-  const agentStream = await runAgent(sessionId)
+  const agentStream = await runAgent(sessionId, undefined, options)
 
   for await (const event of adaptStream(agentStream.result.fullStream)) {
     yield event

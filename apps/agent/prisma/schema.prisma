@@ -6,10 +6,25 @@ datasource db {
   provider = "postgresql"
 }
 
+model Bot {
+  id           String    @id @default(cuid())
+  name         String
+  provider     String    @default("deepseek")
+  model        String    @default("deepseek-chat")
+  baseURL      String?
+  apiKey       String
+  systemPrompt String?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  sessions     Session[]
+}
+
 model Session {
   id              String           @id @default(cuid())
   title           String?
-  model           String           @default("deepseek-chat")
+  source          String           @default("web") // "web" | platform name e.g. "feishu"
+  botId           String?
+  bot             Bot?             @relation(fields: [botId], references: [id])
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
   messages        Message[]

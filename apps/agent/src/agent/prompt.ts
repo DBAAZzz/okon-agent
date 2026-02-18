@@ -1,5 +1,7 @@
 export interface PromptContext {
   memories?: string[]
+  /** Bot 自定义 system prompt，若提供则替换默认指令 */
+  botPrompt?: string
 }
 
 const BASE_INSTRUCTIONS = [
@@ -17,7 +19,8 @@ const BASE_INSTRUCTIONS = [
 ].join('\n')
 
 export function buildSystemPrompt(context?: PromptContext): string {
-  const parts = [BASE_INSTRUCTIONS]
+  const base = context?.botPrompt || BASE_INSTRUCTIONS
+  const parts = [base]
 
   if (context?.memories?.length) {
     parts.push('\n\n## 相关记忆\n' + context.memories.join('\n'))

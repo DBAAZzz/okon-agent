@@ -43,7 +43,7 @@ export interface ChannelManager {
 }
 
 export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
-  const adapters = new Map<string, ChannelAdapter>()
+  const adapters = new Map<string, { adapter: ChannelAdapter; platform: string }>()
 
   async function startAll(): Promise<void> {
     const configs = await prisma.channelConfig.findMany({
@@ -77,22 +77,22 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
       return
     }
 
-    await adapter.start((msg) => handleMessage(configId, adapter, msg))
-    adapters.set(configId, adapter)
+    await adapter.start((msg) => handleMessage(configId, platform, adapter, msg))
+    adapters.set(configId, { adapter, platform })
     logger.info('channel 已启动', { configId, platform })
   }
 
   async function stopOne(configId: string): Promise<void> {
-    const adapter = adapters.get(configId)
-    if (!adapter) return
+    const entry = adapters.get(configId)
+    if (!entry) return
 
-    await adapter.stop()
+    await entry.adapter.stop()
     adapters.delete(configId)
     logger.info('channel 已停止', { configId })
   }
 
   async function stopAll(): Promise<void> {
-    for (const [id, adapter] of adapters) {
+    for (const [id, { adapter }] of adapters) {
       await adapter.stop().catch((err) => logger.error('停止 channel 失败', { id, error: err }))
     }
     adapters.clear()
@@ -100,16 +100,24 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
 
   async function handleMessage(
     configId: string,
+    platform: string,
     adapter: ChannelAdapter,
     msg: InboundMessage,
   ): Promise<void> {
     let replyStream: OutboundReplyStream | undefined
 
     try {
-      const sessionId = await resolveSession(configId, msg.externalChatId)
+      const sessionId = await resolveSession(configId, platform, msg.externalChatId)
 
       logger.info('处理 channel 消息', { configId, sessionId, chatId: msg.externalChatId })
-      const agentStream = await runAgent(sessionId, msg.text, { historyLimit: 0 })
+      const session = await prisma.session.findUnique({
+        where: { id: sessionId },
+        include: { bot: { select: { provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
+      })
+      if (!session?.bot) {
+        throw new Error(`Session ${sessionId} has no bot configured`)
+      }
+      const agentStream = await runAgent(sessionId, msg.text, { historyLimit: 0, bot: session.bot })
       replyStream = await adapter.createReplyStream?.(msg.externalChatId)
 
       if (replyStream) {
@@ -165,7 +173,11 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
     }
   }
 
-  async function resolveSession(configId: string, externalChatId: string): Promise<string> {
+  async function resolveSession(
+    configId: string,
+    platform: string,
+    externalChatId: string,
+  ): Promise<string> {
     const existing = await prisma.channelMapping.findUnique({
       where: {
         channelConfigId_externalChatId: {
@@ -177,7 +189,7 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
 
     if (existing) return existing.sessionId
 
-    const session = await sessionManager.getOrCreate(crypto.randomUUID())
+    const session = await sessionManager.getOrCreate(crypto.randomUUID(), undefined, platform)
     await prisma.channelMapping.create({
       data: {
         channelConfigId: configId,
@@ -188,6 +200,7 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
 
     logger.info('创建 channel-session 映射', {
       configId,
+      platform,
       externalChatId,
       sessionId: session.id,
     })

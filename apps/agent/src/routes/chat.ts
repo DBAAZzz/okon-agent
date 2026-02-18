@@ -25,8 +25,18 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     }
 
     try {
+      // 查询 session 绑定的 bot（若有）
+      const session = await request.server.prisma.session.findUnique({
+        where: { id: sessionId },
+        include: { bot: { select: { provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
+      })
+
+      if (!session) {
+        throw new Error(`Session ${sessionId} has no bot configured`)
+      }
+
       // 启动 agent 流
-      const agentStream = await gateway.runAgent(sessionId, ctx.userMessage)
+      const agentStream = await gateway.runAgent(sessionId, ctx.userMessage, { bot: session.bot! })
       logger.info('开始 UI 流式响应', { sessionId, model: agentStream.modelId })
 
       // 通过 UI Message Stream 协议推送给前端
@@ -54,8 +64,17 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       return
     }
 
+    const session = await request.server.prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { bot: { select: { provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
+    })
+    if (!session?.bot) {
+      reply.code(400).send({ error: 'Session has no bot configured' })
+      return
+    }
+
     setSSEHeaders(reply)
-    await pipeEvents(reply, gateway.chat(sessionId, message))
+    await pipeEvents(reply, gateway.chat(sessionId, message, { bot: session.bot }))
   })
 
   // SSE：审批后继续
@@ -66,7 +85,16 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       return
     }
 
+    const session = await request.server.prisma.session.findUnique({
+      where: { id: sessionId },
+      include: { bot: { select: { provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
+    })
+    if (!session?.bot) {
+      reply.code(400).send({ error: 'Session has no bot configured' })
+      return
+    }
+
     setSSEHeaders(reply)
-    await pipeEvents(reply, gateway.continueAfterApproval(sessionId))
+    await pipeEvents(reply, gateway.continueAfterApproval(sessionId, { bot: session.bot }))
   })
 }

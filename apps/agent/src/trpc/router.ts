@@ -2,7 +2,6 @@ import { initTRPC } from '@trpc/server';
 import { z } from 'zod';
 import type { Context } from './context.js';
 import { sessionManager } from '../agent/session-manager.js';
-import { modelRegistry } from '../agent/models/index.js';
 import { channelManager } from '../channel/index.js';
 
 const t = initTRPC.context<Context>().create();
@@ -12,30 +11,31 @@ export const publicProcedure = t.procedure;
 
 export const appRouter = router({
   session: router({
-    // 获取会话列表
-    list: publicProcedure.query(async () => {
-      return sessionManager.getAllSessions();
+    // 获取会话列表（仅 web 来源）
+    list: publicProcedure.query(async ({ ctx }) => {
+      return ctx.req.server.prisma.session.findMany({
+        where: { source: 'web' },
+        orderBy: { updatedAt: 'desc' },
+        include: { bot: { select: { id: true, name: true } } },
+      });
     }),
 
     // 创建会话
     create: publicProcedure
       .input(z.object({
         id: z.string().optional(),
-        title: z.string().optional(),
-        model: z.string().optional(),
+        botId: z.string().optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ input, ctx }) => {
         const session = await sessionManager.getOrCreate(
           input.id ?? crypto.randomUUID(),
-          input.model,
+          input.botId,
         );
-        return session;
+        return ctx.req.server.prisma.session.findUniqueOrThrow({
+          where: { id: session.id },
+          include: { bot: true },
+        });
       }),
-
-    // 获取可用模型列表
-    models: publicProcedure.query(() => {
-      return modelRegistry.listIds();
-    }),
 
     // 删除会话
     delete: publicProcedure
@@ -131,6 +131,35 @@ export const appRouter = router({
         await ctx.req.server.prisma.channelConfig.delete({
           where: { id: input.id },
         });
+        return { success: true };
+      }),
+  }),
+
+  bot: router({
+    // 列出所有 Bot
+    list: publicProcedure.query(async ({ ctx }) => {
+      return ctx.req.server.prisma.bot.findMany({ orderBy: { createdAt: 'desc' } });
+    }),
+
+    // 创建 Bot
+    create: publicProcedure
+      .input(z.object({
+        name: z.string(),
+        provider: z.string().default('deepseek'),
+        model: z.string(),
+        baseURL: z.string().optional(),
+        apiKey: z.string().min(1, 'apiKey is required'),
+        systemPrompt: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        return ctx.req.server.prisma.bot.create({ data: input });
+      }),
+
+    // 删除 Bot
+    delete: publicProcedure
+      .input(z.object({ id: z.string() }))
+      .mutation(async ({ input, ctx }) => {
+        await ctx.req.server.prisma.bot.delete({ where: { id: input.id } });
         return { success: true };
       }),
   }),

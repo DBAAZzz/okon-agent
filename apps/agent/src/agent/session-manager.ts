@@ -96,14 +96,14 @@ export class SessionManager {
 
   constructor(private prisma: PrismaClient) {}
 
-  async getOrCreate(sessionId: string, model?: string) {
+  async getOrCreate(sessionId: string, botId?: string, source = 'web') {
     let session = await this.prisma.session.findUnique({ where: { id: sessionId } });
 
     if (!session) {
       session = await this.prisma.session.create({
-        data: { id: sessionId, ...(model && { model }) },
+        data: { id: sessionId, source, ...(botId && { botId }) },
       });
-      logger.info('创建新会话', { sessionId, model });
+      logger.info('创建新会话', { sessionId, source, botId });
     }
 
     return session;

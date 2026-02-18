@@ -1,27 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-
-export type ToolDetail = {
-  toolCallId: string;
-  toolName: string;
-  state: string;
-  input?: unknown;
-  output?: unknown;
-  errorText?: string;
-  approval?: {
-    id: string;
-    approved?: boolean;
-    reason?: string;
-  };
-};
-
-export type ChatMessage = {
-  role: 'user' | 'assistant';
-  content: string;
-  reasoning?: string;
-  tools?: ToolDetail[];
-};
+import type { ChatMessage } from '../types/chat';
 
 function formatValue(value: unknown): string {
   try {
