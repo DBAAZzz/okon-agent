@@ -16,7 +16,7 @@ import {
 } from '@/lib/chat-transformers';
 
 type Props = {
-  sessionId: string;
+  sessionId: number;
 };
 
 export function ChatInterface({ sessionId }: Props) {
@@ -30,7 +30,7 @@ export function ChatInterface({ sessionId }: Props) {
   );
 
   const { messages, setMessages, status, error, sendMessage, addToolApprovalResponse } = useChat({
-    id: sessionId,
+    id: String(sessionId),
     transport,
     sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
   });
@@ -60,7 +60,7 @@ export function ChatInterface({ sessionId }: Props) {
         <div className="flex items-center justify-between gap-3">
           <div>
             <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--ink-2)]">Active Session</div>
-            <div className="text-sm font-semibold text-[var(--ink-1)] font-mono">{sessionId.slice(0, 12)}</div>
+            <div className="text-sm font-semibold text-[var(--ink-1)] font-mono">#{sessionId}</div>
           </div>
           <div className="rounded-full border border-[var(--line-soft)] bg-white/80 px-3 py-1.5 text-xs text-[var(--ink-2)]">
             状态: {status === 'ready' ? '空闲' : status === 'error' ? '异常' : '处理中'}

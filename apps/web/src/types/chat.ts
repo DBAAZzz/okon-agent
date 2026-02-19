@@ -20,16 +20,21 @@ export type ChatMessage = {
 };
 
 export type Bot = {
-  id: string;
+  id: number;
   name: string;
   provider: string;
   model: string;
+  baseURL?: string | null;
+  apiKey?: string | null;
+  systemPrompt?: string | null;
+  createdAt?: string;
+  updatedAt?: string;
 };
 
 export type Session = {
-  id: string;
+  id: number;
   title: string | null;
-  bot: { id: string; name: string } | null;
+  bot: { id: number; name: string } | null;
   createdAt: string;
   updatedAt: string;
 };

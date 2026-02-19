@@ -3,10 +3,10 @@
 import { useSessions } from '@/hooks/useSessions';
 
 type Props = {
-  botId: string | null;
-  currentSessionId: string | null;
-  onSelectSession: (sessionId: string) => void;
-  onNewSession: (sessionId: string) => void;
+  botId: number | null;
+  currentSessionId: number | null;
+  onSelectSession: (sessionId: number) => void;
+  onNewSession: (sessionId: number) => void;
 };
 
 export function SessionSidebar({ botId, currentSessionId, onSelectSession, onNewSession }: Props) {
@@ -51,7 +51,7 @@ export function SessionSidebar({ botId, currentSessionId, onSelectSession, onNew
             >
               <div className="min-w-0">
                 <div className="truncate pr-2">
-                  {session.title || session.id.slice(0, 8)}
+                  {session.title || `Session #${session.id}`}
                 </div>
               </div>
               <button

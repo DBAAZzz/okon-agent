@@ -7,23 +7,25 @@ datasource db {
 }
 
 model Bot {
-  id           String    @id @default(cuid())
-  name         String
-  provider     String    @default("deepseek")
-  model        String    @default("deepseek-chat")
-  baseURL      String?
-  apiKey       String
-  systemPrompt String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-  sessions     Session[]
+  id             Int               @id @default(autoincrement())
+  name           String
+  provider       String            @default("deepseek")
+  model          String            @default("deepseek-chat")
+  baseURL        String?
+  apiKey         String
+  systemPrompt   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  sessions       Session[]
+  channelConfigs ChannelConfig[]
+  knowledgeBases BotKnowledgeBase[]
 }
 
 model Session {
-  id              String           @id @default(cuid())
+  id              Int              @id @default(autoincrement())
   title           String?
   source          String           @default("web") // "web" | platform name e.g. "feishu"
-  botId           String?
+  botId           Int?
   bot             Bot?             @relation(fields: [botId], references: [id])
   createdAt       DateTime         @default(now())
   updatedAt       DateTime         @updatedAt
@@ -32,22 +34,24 @@ model Session {
 }
 
 model ChannelConfig {
-  id        String           @id @default(cuid())
-  platform  String           @unique // MVP: 每平台一个配置
+  id        Int              @id @default(autoincrement())
+  platform  String
   name      String
   enabled   Boolean          @default(true)
   config    Json             // 平台凭证，如 { appId, appSecret }
+  botId     Int              @unique // 一个 bot 最多绑定一个 channel
+  bot       Bot              @relation(fields: [botId], references: [id], onDelete: Cascade)
   createdAt DateTime         @default(now())
   updatedAt DateTime         @updatedAt
   mappings  ChannelMapping[]
 }
 
 model ChannelMapping {
-  id              String        @id @default(cuid())
-  channelConfigId String
+  id              Int           @id @default(autoincrement())
+  channelConfigId Int
   channelConfig   ChannelConfig @relation(fields: [channelConfigId], references: [id], onDelete: Cascade)
   externalChatId  String
-  sessionId       String
+  sessionId       Int
   session         Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   createdAt       DateTime      @default(now())
 
@@ -56,12 +60,47 @@ model ChannelMapping {
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  sessionId String
+  id        Int      @id @default(autoincrement())
+  sessionId Int
   session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   role      String
   content   Json
   createdAt DateTime @default(now())
 
   @@index([sessionId])
+}
+
+model KnowledgeBase {
+  id          Int                @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  documents   Document[]
+  bots        BotKnowledgeBase[]
+}
+
+model Document {
+  id              Int           @id @default(autoincrement())
+  knowledgeBaseId Int
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  title           String?
+  content         String
+  qdrantPointId   String?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([knowledgeBaseId])
+}
+
+model BotKnowledgeBase {
+  id              Int           @id @default(autoincrement())
+  botId           Int
+  bot             Bot           @relation(fields: [botId], references: [id], onDelete: Cascade)
+  knowledgeBaseId Int
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([botId, knowledgeBaseId])
 }

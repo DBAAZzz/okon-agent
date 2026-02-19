@@ -2,6 +2,8 @@ export interface PromptContext {
   memories?: string[]
   /** Bot 自定义 system prompt，若提供则替换默认指令 */
   botPrompt?: string
+  /** RAG 检索到的知识库文档 */
+  knowledgeDocs?: { title?: string; content: string }[]
 }
 
 const BASE_INSTRUCTIONS = [
@@ -21,6 +23,13 @@ const BASE_INSTRUCTIONS = [
 export function buildSystemPrompt(context?: PromptContext): string {
   const base = context?.botPrompt || BASE_INSTRUCTIONS
   const parts = [base]
+
+  if (context?.knowledgeDocs?.length) {
+    const docs = context.knowledgeDocs
+      .map((d, i) => `${i + 1}. ${d.title ? `[${d.title}] ` : ''}${d.content}`)
+      .join('\n')
+    parts.push('\n\n## 参考文档\n以下是从知识库中检索到的相关文档，请优先基于这些内容回答用户问题：\n' + docs)
+  }
 
   if (context?.memories?.length) {
     parts.push('\n\n## 相关记忆\n' + context.memories.join('\n'))

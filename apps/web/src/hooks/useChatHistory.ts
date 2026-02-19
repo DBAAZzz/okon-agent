@@ -4,7 +4,7 @@ import type { UIMessage } from "ai";
 import { toHistoryUIMessages } from "@/lib/chat-transformers";
 
 export function useChatHistory(
-  sessionId: string,
+  sessionId: number,
   setMessages: (messages: UIMessage[]) => void,
 ) {
   const [isLoading, setIsLoading] = useState(false);

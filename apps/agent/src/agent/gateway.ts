@@ -7,6 +7,7 @@ import { createAgentWithCredentials } from './factory.js'
 import { sessionManager } from './session-manager.js'
 import { memoryStore } from '../capabilities/memory/index.js'
 import { buildSystemPrompt } from './prompt.js'
+import type { KnowledgeStore } from '../capabilities/knowledge/knowledge-store.js'
 
 const logger = createLogger('agent-gateway')
 
@@ -22,12 +23,15 @@ export type RunAgentOptions = {
   historyLimit?: number
   /** Bot 配置：provider、model、systemPrompt、以及可选的自定义凭证 */
   bot: {
+    id?: number
     provider: string
     model: string
     systemPrompt?: string | null
     apiKey?: string | null
     baseURL?: string | null
   }
+  /** 知识库服务实例，用于 RAG 检索 */
+  knowledgeStore?: KnowledgeStore
 }
 
 /**
@@ -35,7 +39,7 @@ export type RunAgentOptions = {
  * 存用户消息 → 取历史 → 搜记忆 → 建 prompt → 创建 agent → 启动 stream
  */
 export async function runAgent(
-  sessionId: string,
+  sessionId: number,
   userMessage: string | undefined,
   options: RunAgentOptions,
 ): Promise<AgentStreamResult> {
@@ -63,11 +67,22 @@ export async function runAgent(
     history = await sessionManager.getHistory(sessionId)
   }
 
-  const memories = userMessage ? await memoryStore.recent({ sessionId }, 3) : []
+  const memories = userMessage ? await memoryStore.recent({ sessionId: String(sessionId) }, 3) : []
+
+  // RAG: 从 Bot 绑定的知识库中检索相关文档
+  let knowledgeDocs: { title?: string; content: string }[] = []
+  if (userMessage && options.bot.id && options.knowledgeStore) {
+    try {
+      knowledgeDocs = await options.knowledgeStore.searchForBot(options.bot.id, userMessage, 5)
+    } catch (err) {
+      logger.warn('知识库检索失败，跳过 RAG', err)
+    }
+  }
 
   const instructions = buildSystemPrompt({
     memories: memories.map((m) => m.content),
     botPrompt: options.bot?.systemPrompt ?? undefined,
+    knowledgeDocs,
   })
 
   const credentials: { apiKey: string; baseURL?: string } = {
@@ -89,7 +104,7 @@ export async function runAgent(
  * - 无待审批：持久化消息 + 异步存记忆
  */
 export async function finalizeStream(
-  sessionId: string,
+  sessionId: number,
   agentStream: AgentStreamResult,
 ): Promise<void> {
   const response = await agentStream.result.response
@@ -113,7 +128,7 @@ export async function finalizeStream(
   if (agentStream.userMessage) {
     memoryStore
       .storeConversation(agentStream.userMessage, response.messages, {
-        sessionId,
+        sessionId: String(sessionId),
       })
       .catch((err) => {
         logger.error('记忆存储失败', err)
@@ -129,7 +144,7 @@ export async function finalizeStream(
  * 发送新消息并流式返回 StreamEvent
  */
 export async function* chat(
-  sessionId: string,
+  sessionId: number,
   message: string,
   options: RunAgentOptions,
 ): AsyncGenerator<StreamEvent> {
@@ -146,7 +161,7 @@ export async function* chat(
  * 审批后继续流式返回
  */
 export async function* continueAfterApproval(
-  sessionId: string,
+  sessionId: number,
   options: RunAgentOptions,
 ): AsyncGenerator<StreamEvent> {
   const agentStream = await runAgent(sessionId, undefined, options)

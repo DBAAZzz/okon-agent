@@ -13,7 +13,7 @@ export type AppPrismaClient = PrismaClient & {
     delete(args: AnyArgs): Promise<any>
   }
   channelMapping: {
-    findUnique(args: AnyArgs): Promise<{ sessionId: string } | null>
+    findUnique(args: AnyArgs): Promise<{ sessionId: number } | null>
     create(args: AnyArgs): Promise<any>
   }
 }

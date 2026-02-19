@@ -4,6 +4,8 @@ import { registerMiddlewares } from './middlewares/index.js';
 import { registerRoutes } from './routes/index.js';
 import { initSessionManager } from './agent/session-manager.js';
 import { initMemory } from './capabilities/memory/index.js';
+import { initKnowledgeStore } from './capabilities/knowledge/index.js';
+import { createEmbeddings } from './capabilities/embeddings/index.js';
 import { initChannelManager } from './channel/index.js';
 import { createLogger } from '@okon/shared';
 
@@ -26,6 +28,10 @@ initSessionManager(fastify.prisma);
 
 // Initialize memory store with qdrant
 initMemory(fastify.qdrant);
+
+// Initialize knowledge store with prisma + qdrant + embeddings
+const embeddings = createEmbeddings(fastify.qdrant);
+initKnowledgeStore(fastify.prisma as any, fastify.qdrant, embeddings);
 
 // Initialize channel manager with prisma
 const cm = initChannelManager(fastify.prisma);

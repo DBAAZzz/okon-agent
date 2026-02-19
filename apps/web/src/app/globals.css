@@ -11,6 +11,26 @@
   --warm: #f2c078;
   --surface-0: #f4efe6;
   --surface-1: rgba(255, 255, 255, 0.78);
+  --background: 40 43% 95%;
+  --foreground: 212 35% 18%;
+  --card: 0 0% 100%;
+  --card-foreground: 212 35% 18%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 212 35% 18%;
+  --primary: 175 77% 26%;
+  --primary-foreground: 48 43% 96%;
+  --secondary: 206 31% 94%;
+  --secondary-foreground: 212 35% 24%;
+  --muted: 205 25% 90%;
+  --muted-foreground: 213 19% 45%;
+  --accent: 38 80% 84%;
+  --accent-foreground: 212 35% 24%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 210 22% 84%;
+  --input: 210 22% 84%;
+  --ring: 175 77% 26%;
+  --radius: 0.85rem;
 }
 
 * {

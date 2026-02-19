@@ -3,6 +3,7 @@ import { createLogger } from '@okon/shared'
 import * as gateway from '../agent/gateway.js'
 import { setSSEHeaders, setUIMessageStreamHeaders, pipeEvents, pipeUIMessageChunks } from './sse.js'
 import { resolveRequestContext, type ChatPostBody } from './ui-message.js'
+import { knowledgeStore } from '../capabilities/knowledge/index.js'
 
 const logger = createLogger('chat-routes')
 
@@ -28,7 +29,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       // 查询 session 绑定的 bot（若有）
       const session = await request.server.prisma.session.findUnique({
         where: { id: sessionId },
-        include: { bot: { select: { provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
+        include: { bot: { select: { id: true, provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
       })
 
       if (!session) {
@@ -36,7 +37,7 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       }
 
       // 启动 agent 流
-      const agentStream = await gateway.runAgent(sessionId, ctx.userMessage, { bot: session.bot! })
+      const agentStream = await gateway.runAgent(sessionId, ctx.userMessage, { bot: session.bot!, knowledgeStore })
       logger.info('开始 UI 流式响应', { sessionId, model: agentStream.modelId })
 
       // 通过 UI Message Stream 协议推送给前端
@@ -58,15 +59,21 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
 
   // SSE：新消息
   fastify.get('/api/chat/stream', async (request, reply) => {
-    const { sessionId, message } = request.query as { sessionId?: string; message?: string }
-    if (!sessionId || !message) {
+    const { sessionId: sessionIdStr, message } = request.query as { sessionId?: string; message?: string }
+    if (!sessionIdStr || !message) {
       reply.code(400).send({ error: 'Missing sessionId or message' })
       return
     }
 
+    const sessionId = parseInt(sessionIdStr, 10)
+    if (isNaN(sessionId)) {
+      reply.code(400).send({ error: 'Invalid sessionId' })
+      return
+    }
+
     const session = await request.server.prisma.session.findUnique({
       where: { id: sessionId },
-      include: { bot: { select: { provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
+      include: { bot: { select: { id: true, provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
     })
     if (!session?.bot) {
       reply.code(400).send({ error: 'Session has no bot configured' })
@@ -74,20 +81,26 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     }
 
     setSSEHeaders(reply)
-    await pipeEvents(reply, gateway.chat(sessionId, message, { bot: session.bot }))
+    await pipeEvents(reply, gateway.chat(sessionId, message, { bot: session.bot, knowledgeStore }))
   })
 
   // SSE：审批后继续
   fastify.get('/api/chat/continue', async (request, reply) => {
-    const { sessionId } = request.query as { sessionId?: string }
-    if (!sessionId) {
+    const { sessionId: sessionIdStr } = request.query as { sessionId?: string }
+    if (!sessionIdStr) {
       reply.code(400).send({ error: 'Missing sessionId' })
+      return
+    }
+
+    const sessionId = parseInt(sessionIdStr, 10)
+    if (isNaN(sessionId)) {
+      reply.code(400).send({ error: 'Invalid sessionId' })
       return
     }
 
     const session = await request.server.prisma.session.findUnique({
       where: { id: sessionId },
-      include: { bot: { select: { provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
+      include: { bot: { select: { id: true, provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
     })
     if (!session?.bot) {
       reply.code(400).send({ error: 'Session has no bot configured' })
@@ -95,6 +108,6 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
     }
 
     setSSEHeaders(reply)
-    await pipeEvents(reply, gateway.continueAfterApproval(sessionId, { bot: session.bot }))
+    await pipeEvents(reply, gateway.continueAfterApproval(sessionId, { bot: session.bot, knowledgeStore }))
   })
 }

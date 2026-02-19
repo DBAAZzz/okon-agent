@@ -17,7 +17,7 @@ export type ApprovalDecision = {
  * 之后下一次 runAgent() 会基于这些历史继续执行工具流程
  */
 export async function resolveApprovals(
-  sessionId: string,
+  sessionId: number,
   decisions: ApprovalDecision[],
 ): Promise<void> {
   const pendingMessages = sessionManager.takePendingMessages(sessionId)

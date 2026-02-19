@@ -5,8 +5,8 @@ import { useBots } from '@/hooks/useBots';
 import { Bot } from '@/types/chat';
 
 type Props = {
-  currentBotId: string | null;
-  onSelectBot: (botId: string) => void;
+  currentBotId: number | null;
+  onSelectBot: (botId: number) => void;
 };
 
 export function BotSidebar({ currentBotId, onSelectBot }: Props) {

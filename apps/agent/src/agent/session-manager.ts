@@ -90,26 +90,26 @@ function hasApprovalRequestInHistory(messages: ModelMessage[], approvalId: strin
 
 export class SessionManager {
   /** pendingApprovals 是临时状态，不需要持久化 */
-  private pendingApprovals = new Map<string, ApprovalRequestPart[]>();
+  private pendingApprovals = new Map<number, ApprovalRequestPart[]>();
   /** 审批中断时暂存的 agent 响应消息，等审批完成后再持久化 */
-  private pendingMessages = new Map<string, ModelMessage[]>();
+  private pendingMessages = new Map<number, ModelMessage[]>();
 
   constructor(private prisma: PrismaClient) {}
 
-  async getOrCreate(sessionId: string, botId?: string, source = 'web') {
-    let session = await this.prisma.session.findUnique({ where: { id: sessionId } });
-
-    if (!session) {
-      session = await this.prisma.session.create({
-        data: { id: sessionId, source, ...(botId && { botId }) },
-      });
-      logger.info('创建新会话', { sessionId, source, botId });
+  async getOrCreate(sessionId?: number, botId?: number, source = 'web') {
+    if (sessionId) {
+      const session = await this.prisma.session.findUnique({ where: { id: sessionId } });
+      if (session) return session;
     }
 
+    const session = await this.prisma.session.create({
+      data: { source, ...(botId && { botId }) },
+    });
+    logger.info('创建新会话', { sessionId: session.id, source, botId });
     return session;
   }
 
-  async getHistory(sessionId: string, limit = 20, windowMinutes = 24 * 60): Promise<ModelMessage[]> {
+  async getHistory(sessionId: number, limit = 20, windowMinutes = 24 * 60): Promise<ModelMessage[]> {
     if (limit <= 0) {
       return [];
     }
@@ -144,8 +144,7 @@ export class SessionManager {
     return finalSanitized.messages;
   }
 
-  async addMessage(sessionId: string, message: ModelMessage): Promise<void> {
-    await this.getOrCreate(sessionId);
+  async addMessage(sessionId: number, message: ModelMessage): Promise<void> {
     await this.prisma.message.create({
       data: {
         sessionId,
@@ -156,10 +155,9 @@ export class SessionManager {
     logger.debug('添加消息到历史', { sessionId, role: message.role });
   }
 
-  async addMessages(sessionId: string, messages: ModelMessage[]): Promise<void> {
+  async addMessages(sessionId: number, messages: ModelMessage[]): Promise<void> {
     if (messages.length === 0) return;
 
-    await this.getOrCreate(sessionId);
     const baseTime = Date.now();
     await this.prisma.message.createMany({
       data: messages.map((m, index) => ({
@@ -173,38 +171,38 @@ export class SessionManager {
     logger.debug('添加多条消息到历史', { sessionId, count: messages.length });
   }
 
-  setPendingApprovals(sessionId: string, approvals: ApprovalRequestPart[]): void {
+  setPendingApprovals(sessionId: number, approvals: ApprovalRequestPart[]): void {
     this.pendingApprovals.set(sessionId, approvals);
     logger.info('设置待审批请求', { sessionId, count: approvals.length });
   }
 
-  getPendingApprovals(sessionId: string): ApprovalRequestPart[] {
+  getPendingApprovals(sessionId: number): ApprovalRequestPart[] {
     return this.pendingApprovals.get(sessionId) || [];
   }
 
-  clearPendingApprovals(sessionId: string): void {
+  clearPendingApprovals(sessionId: number): void {
     this.pendingApprovals.delete(sessionId);
     logger.debug('清除待审批请求', { sessionId });
   }
 
   /** 暂存审批中断时的 agent 响应消息 */
-  setPendingMessages(sessionId: string, messages: ModelMessage[]): void {
+  setPendingMessages(sessionId: number, messages: ModelMessage[]): void {
     this.pendingMessages.set(sessionId, messages);
     logger.debug('暂存待审批消息', { sessionId, count: messages.length });
   }
 
   /** 取出并清除暂存的消息 */
-  takePendingMessages(sessionId: string): ModelMessage[] {
+  takePendingMessages(sessionId: number): ModelMessage[] {
     const messages = this.pendingMessages.get(sessionId) || [];
     this.pendingMessages.delete(sessionId);
     return messages;
   }
 
   async handleApproval(
-    sessionId: string,
+    sessionId: number,
     approvalId: string,
     approved: boolean,
-    reason?: string
+    reason?: string,
   ): Promise<void> {
     const approvals = this.getPendingApprovals(sessionId);
     const approval = approvals.find((a) => a.approvalId === approvalId);
@@ -236,7 +234,7 @@ export class SessionManager {
 
       if (!hasRequest) {
         throw new Error(
-          `Approval ${approvalId} has no matching tool-approval-request in session ${sessionId}`
+          `Approval ${approvalId} has no matching tool-approval-request in session ${sessionId}`,
         );
       }
 
@@ -256,7 +254,7 @@ export class SessionManager {
     });
   }
 
-  async deleteSession(sessionId: string): Promise<boolean> {
+  async deleteSession(sessionId: number): Promise<boolean> {
     try {
       await this.prisma.session.delete({ where: { id: sessionId } });
       this.pendingApprovals.delete(sessionId);

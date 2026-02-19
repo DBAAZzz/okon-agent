@@ -2,6 +2,13 @@
 
 import { useState } from 'react';
 import { trpc } from '@/lib/trpc';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@okon/ui';
 
 export default function EmbeddingsPage() {
   const [content, setContent] = useState('');
@@ -73,16 +80,20 @@ export default function EmbeddingsPage() {
         <h2 className="text-xl font-semibold mb-4">Search</h2>
         <div className="mb-4">
           <label className="block text-sm font-medium mb-2">Mode</label>
-          <select
+          <Select
             value={mode}
-            onChange={(e) => setMode(e.target.value as 'dense' | 'sparse' | 'hybrid')}
-            className="w-full p-3 border rounded"
+            onValueChange={(value) => setMode(value as 'dense' | 'sparse' | 'hybrid')}
             disabled={loading}
           >
-            <option value="dense">Dense</option>
-            <option value="sparse">Sparse (BM25)</option>
-            <option value="hybrid">Hybrid (Dense + Sparse)</option>
-          </select>
+            <SelectTrigger className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="dense">Dense</SelectItem>
+              <SelectItem value="sparse">Sparse (BM25)</SelectItem>
+              <SelectItem value="hybrid">Hybrid (Dense + Sparse)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
         <input
           type="text"

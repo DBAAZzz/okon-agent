@@ -3,9 +3,16 @@
 import Link from 'next/link';
 import { useCallback, useEffect, useState } from 'react';
 import { trpc } from '@/lib/trpc';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@okon/ui';
 
 type Bot = {
-  id: string;
+  id: number;
   name: string;
   provider: string;
   model: string;
@@ -126,7 +133,7 @@ export default function BotsPage() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleDelete = async (id: number) => {
     try {
       await (trpc.bot as any).delete.mutate({ id });
       setBots(prev => prev.filter(b => b.id !== id));
@@ -147,12 +154,20 @@ export default function BotsPage() {
               创建 Bot，在新建会话时选择绑定。
             </p>
           </div>
-          <Link
-            href="/"
-            className="rounded-xl border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-2)] hover:bg-white/70 transition"
-          >
-            返回聊天
-          </Link>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/knowledge-bases"
+              className="rounded-xl border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-2)] hover:bg-white/70 transition"
+            >
+              知识库管理
+            </Link>
+            <Link
+              href="/"
+              className="rounded-xl border border-[var(--line-soft)] px-3 py-2 text-sm text-[var(--ink-2)] hover:bg-white/70 transition"
+            >
+              返回 Bot 列表
+            </Link>
+          </div>
         </div>
 
         {/* 创建表单 */}
@@ -173,33 +188,41 @@ export default function BotsPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
             <label className="block">
               <span className="mb-1 block text-sm text-[var(--ink-2)]">厂商</span>
-              <select
-                value={form.provider}
-                onChange={e => handleProviderChange(e.target.value)}
-                className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
-                disabled={saving}
-              >
-                {PROVIDER_KEYS.map(key => (
-                  <option key={key} value={key}>{PROVIDERS[key].label}</option>
-                ))}
-              </select>
+              <Select value={form.provider} onValueChange={handleProviderChange} disabled={saving}>
+                <SelectTrigger className="w-full rounded-xl border-[var(--line-soft)] bg-white text-sm focus-visible:ring-[var(--brand)]">
+                  <SelectValue placeholder="选择厂商" />
+                </SelectTrigger>
+                <SelectContent>
+                  {PROVIDER_KEYS.map((key) => (
+                    <SelectItem key={key} value={key}>
+                      {PROVIDERS[key].label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </label>
 
             <label className="block">
               <span className="mb-1 block text-sm text-[var(--ink-2)]">模型</span>
               {currentProviderConfig.models.length > 0 ? (
                 <>
-                  <select
+                  <Select
                     value={isCustomModel ? '__custom__' : form.model}
-                    onChange={e => handleModelSelect(e.target.value)}
-                    className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
+                    onValueChange={handleModelSelect}
                     disabled={saving}
                   >
-                    {currentProviderConfig.models.map(m => (
-                      <option key={m} value={m}>{m}</option>
-                    ))}
-                    <option value="__custom__">自定义...</option>
-                  </select>
+                    <SelectTrigger className="w-full rounded-xl border-[var(--line-soft)] bg-white text-sm focus-visible:ring-[var(--brand)]">
+                      <SelectValue placeholder="选择模型" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {currentProviderConfig.models.map((m) => (
+                        <SelectItem key={m} value={m}>
+                          {m}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value="__custom__">自定义...</SelectItem>
+                    </SelectContent>
+                  </Select>
                   {isCustomModel && (
                     <input
                       value={customModel}
@@ -296,12 +319,20 @@ export default function BotsPage() {
                     <p className="text-xs text-[var(--ink-2)] truncate">{bot.systemPrompt}</p>
                   )}
                 </div>
-                <button
-                  onClick={() => handleDelete(bot.id)}
-                  className="shrink-0 text-sm text-[#a53f37] hover:text-[#dc3b3b] transition"
-                >
-                  删除
-                </button>
+                <div className="shrink-0 flex items-center gap-3">
+                  <Link
+                    href={`/bots/${bot.id}/edit`}
+                    className="text-sm text-[var(--brand)] hover:text-[var(--brand-strong)] transition"
+                  >
+                    编辑
+                  </Link>
+                  <button
+                    onClick={() => handleDelete(bot.id)}
+                    className="text-sm text-[#a53f37] hover:text-[#dc3b3b] transition"
+                  >
+                    删除
+                  </button>
+                </div>
               </div>
             ))}
           </section>

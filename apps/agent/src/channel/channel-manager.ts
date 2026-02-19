@@ -3,6 +3,7 @@ import { createLogger } from '@okon/shared'
 import { runAgent, finalizeStream } from '../agent/gateway.js'
 import { adaptStream } from '../agent/events/index.js'
 import { sessionManager } from '../agent/session-manager.js'
+import { knowledgeStore } from '../capabilities/knowledge/index.js'
 import type { ChannelAdapter, InboundMessage, OutboundReplyStream } from './types.js'
 import { createFeishuAdapter, type FeishuConfig } from './feishu-adapter.js'
 import type { AppPrismaClient } from '../plugins/prisma-types.js'
@@ -37,13 +38,13 @@ function extractAssistantText(messages: ModelMessage[]): string {
 
 export interface ChannelManager {
   startAll(): Promise<void>
-  startOne(configId: string, platform: string, config: Record<string, any>): Promise<void>
-  stopOne(configId: string): Promise<void>
+  startOne(configId: number, platform: string, config: Record<string, any>, botId: number): Promise<void>
+  stopOne(configId: number): Promise<void>
   stopAll(): Promise<void>
 }
 
 export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
-  const adapters = new Map<string, { adapter: ChannelAdapter; platform: string }>()
+  const adapters = new Map<number, { adapter: ChannelAdapter; platform: string }>()
 
   async function startAll(): Promise<void> {
     const configs = await prisma.channelConfig.findMany({
@@ -52,7 +53,7 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
 
     for (const cfg of configs) {
       try {
-        await startOne(cfg.id, cfg.platform, cfg.config as Record<string, any>)
+        await startOne(cfg.id, cfg.platform, cfg.config as Record<string, any>, cfg.botId)
       } catch (err) {
         logger.error('启动 channel 失败', { platform: cfg.platform, error: err })
       }
@@ -62,9 +63,10 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
   }
 
   async function startOne(
-    configId: string,
+    configId: number,
     platform: string,
     config: Record<string, any>,
+    botId: number,
   ): Promise<void> {
     if (adapters.has(configId)) {
       logger.warn('channel 已在运行', { configId })
@@ -77,12 +79,12 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
       return
     }
 
-    await adapter.start((msg) => handleMessage(configId, platform, adapter, msg))
+    await adapter.start((msg) => handleMessage(configId, platform, adapter, msg, botId))
     adapters.set(configId, { adapter, platform })
-    logger.info('channel 已启动', { configId, platform })
+    logger.info('channel 已启动', { configId, platform, botId })
   }
 
-  async function stopOne(configId: string): Promise<void> {
+  async function stopOne(configId: number): Promise<void> {
     const entry = adapters.get(configId)
     if (!entry) return
 
@@ -99,25 +101,26 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
   }
 
   async function handleMessage(
-    configId: string,
+    configId: number,
     platform: string,
     adapter: ChannelAdapter,
     msg: InboundMessage,
+    botId: number,
   ): Promise<void> {
     let replyStream: OutboundReplyStream | undefined
 
     try {
-      const sessionId = await resolveSession(configId, platform, msg.externalChatId)
+      const sessionId: number = await resolveSession(configId, platform, msg.externalChatId, botId)
 
       logger.info('处理 channel 消息', { configId, sessionId, chatId: msg.externalChatId })
       const session = await prisma.session.findUnique({
         where: { id: sessionId },
-        include: { bot: { select: { provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
+        include: { bot: { select: { id: true, provider: true, model: true, systemPrompt: true, apiKey: true, baseURL: true } } },
       })
       if (!session?.bot) {
         throw new Error(`Session ${sessionId} has no bot configured`)
       }
-      const agentStream = await runAgent(sessionId, msg.text, { historyLimit: 0, bot: session.bot })
+      const agentStream = await runAgent(sessionId, msg.text, { historyLimit: 0, bot: session.bot, knowledgeStore })
       replyStream = await adapter.createReplyStream?.(msg.externalChatId)
 
       if (replyStream) {
@@ -174,10 +177,11 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
   }
 
   async function resolveSession(
-    configId: string,
+    configId: number,
     platform: string,
     externalChatId: string,
-  ): Promise<string> {
+    botId: number,
+  ): Promise<number> {
     const existing = await prisma.channelMapping.findUnique({
       where: {
         channelConfigId_externalChatId: {
@@ -189,7 +193,7 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
 
     if (existing) return existing.sessionId
 
-    const session = await sessionManager.getOrCreate(crypto.randomUUID(), undefined, platform)
+    const session = await sessionManager.getOrCreate(undefined, botId, platform)
     await prisma.channelMapping.create({
       data: {
         channelConfigId: configId,
@@ -228,7 +232,7 @@ function createNotInitializedManager(): ChannelManager {
     async startAll() {
       throw error
     },
-    async startOne() {
+    async startOne(_configId, _platform, _config, _botId) {
       throw error
     },
     async stopOne() {

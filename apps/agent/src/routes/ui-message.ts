@@ -28,7 +28,7 @@ export type UIMessagePayload = {
 }
 
 export type ChatPostBody = {
-  sessionId?: string
+  sessionId?: number
   messages?: UIMessagePayload[]
   trigger?: 'submit-message' | 'regenerate-message'
   messageId?: string
@@ -100,7 +100,7 @@ function extractApprovalResponses(messages: UIMessagePayload[]) {
  * @returns RequestContext，若缺少必要的用户消息则返回 null
  */
 export async function resolveRequestContext(
-  sessionId: string,
+  sessionId: number,
   body: ChatPostBody,
 ): Promise<RequestContext | null> {
   const { messages = [], trigger, messageId } = body
