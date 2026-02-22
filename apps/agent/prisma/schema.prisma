@@ -77,13 +77,32 @@ model KnowledgeBase {
   createdAt   DateTime           @default(now())
   updatedAt   DateTime           @updatedAt
   documents   Document[]
+  sourceFiles SourceFile[]
   bots        BotKnowledgeBase[]
+}
+
+model SourceFile {
+  id              Int           @id @default(autoincrement())
+  knowledgeBaseId Int
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  fileName        String
+  fileType        String        // pdf, docx, txt, md, manual
+  fileSize        Int           @default(0)
+  checksum        String?
+  createdAt       DateTime      @default(now())
+  documents       Document[]
+
+  @@unique([knowledgeBaseId, checksum])
+  @@index([knowledgeBaseId])
 }
 
 model Document {
   id              Int           @id @default(autoincrement())
   knowledgeBaseId Int
   knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  sourceFileId    Int
+  sourceFile      SourceFile    @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+  chunkIndex      Int           @default(0)
   title           String?
   content         String
   qdrantPointId   String?
@@ -91,6 +110,7 @@ model Document {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  @@unique([sourceFileId, chunkIndex])
   @@index([knowledgeBaseId])
 }
 

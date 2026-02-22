@@ -262,6 +262,28 @@ export const appRouter = router({
         return ctx.knowledgeStore.listDocuments(input.knowledgeBaseId);
       }),
 
+    // 列出知识库的源文件
+    listSourceFiles: publicProcedure
+      .input(z.object({ knowledgeBaseId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return ctx.knowledgeStore.listSourceFiles(input.knowledgeBaseId);
+      }),
+
+    // 删除源文件（级联删除所有 chunks）
+    deleteSourceFile: publicProcedure
+      .input(z.object({ sourceFileId: z.number() }))
+      .mutation(async ({ input, ctx }) => {
+        const deleted = await ctx.knowledgeStore.deleteSourceFile(input.sourceFileId);
+        return { success: deleted };
+      }),
+
+    // 列出源文件的 chunks
+    listChunks: publicProcedure
+      .input(z.object({ sourceFileId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return ctx.knowledgeStore.listChunks(input.sourceFileId);
+      }),
+
     // 搜索知识库文档
     search: publicProcedure
       .input(z.object({

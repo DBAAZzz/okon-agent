@@ -1,4 +1,4 @@
-import { embed } from 'ai'
+import { embed, embedMany } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import type { QdrantClient } from '@qdrant/js-client-rest'
 import { createVectorStore } from './vector-store.js'
@@ -35,6 +35,20 @@ export function createEmbeddings(client: QdrantClient, model = 'text-embedding-3
         },
       })
       return embedding
+    },
+
+    async embedBatch(texts: string[]): Promise<number[][]> {
+      if (texts.length === 0) return []
+      const { embeddings: results } = await embedMany({
+        model: embeddingModel,
+        values: texts,
+        providerOptions: {
+          openai: {
+            dimensions: 512,
+          },
+        },
+      })
+      return results
     },
 
     async addDocument(

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
@@ -36,15 +36,25 @@ type KnowledgeBaseRecord = {
   description: string | null;
   _count?: {
     documents: number;
+    sourceFiles: number;
     bots: number;
   };
 };
 
-type KnowledgeDocumentRecord = {
+type SourceFileRecord = {
+  id: number;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  createdAt: string;
+  _count?: { documents: number };
+};
+
+type ChunkRecord = {
   id: number;
   title: string | null;
   content: string;
-  metadata: unknown;
+  chunkIndex: number;
   createdAt: string;
 };
 
@@ -67,8 +77,9 @@ type KnowledgeBaseApi = {
       metadata?: Record<string, unknown>;
     }) => Promise<unknown>;
   };
-  deleteDocument: { mutate: (input: { documentId: number }) => Promise<unknown> };
-  listDocuments: { query: (input: { knowledgeBaseId: number }) => Promise<unknown> };
+  listSourceFiles: { query: (input: { knowledgeBaseId: number }) => Promise<unknown> };
+  deleteSourceFile: { mutate: (input: { sourceFileId: number }) => Promise<unknown> };
+  listChunks: { query: (input: { sourceFileId: number }) => Promise<unknown> };
   search: {
     query: (input: {
       knowledgeBaseId: number;
@@ -79,10 +90,11 @@ type KnowledgeBaseApi = {
   };
 };
 
+const UPLOAD_API_BASE = 'http://localhost:3001';
+const ACCEPTED_TYPES = '.pdf,.docx,.txt,.md';
+
 function errorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
+  if (error instanceof Error) return error.message;
   return String(error);
 }
 
@@ -93,12 +105,20 @@ function formatDate(value?: string): string {
   return date.toLocaleString();
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export default function KnowledgeBasesPage() {
   const knowledgeBaseApi = useMemo(() => trpc.knowledgeBase as unknown as KnowledgeBaseApi, []);
 
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseRecord[]>([]);
   const [selectedKnowledgeBaseId, setSelectedKnowledgeBaseId] = useState<number | ''>('');
-  const [documents, setDocuments] = useState<KnowledgeDocumentRecord[]>([]);
+  const [sourceFiles, setSourceFiles] = useState<SourceFileRecord[]>([]);
+  const [expandedFileId, setExpandedFileId] = useState<number | null>(null);
+  const [chunks, setChunks] = useState<ChunkRecord[]>([]);
   const [searchResults, setSearchResults] = useState<KnowledgeSearchResult[]>([]);
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -112,17 +132,22 @@ export default function KnowledgeBasesPage() {
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeSaving, setKnowledgeSaving] = useState(false);
   const [knowledgeDeletingId, setKnowledgeDeletingId] = useState<number | null>(null);
-  const [documentLoading, setDocumentLoading] = useState(false);
+  const [fileLoading, setFileLoading] = useState(false);
+  const [fileDeletingId, setFileDeletingId] = useState<number | null>(null);
+  const [chunksLoading, setChunksLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [documentSaving, setDocumentSaving] = useState(false);
-  const [documentDeletingId, setDocumentDeletingId] = useState<number | null>(null);
   const [searchLoading, setSearchLoading] = useState(false);
   const [status, setStatus] = useState('');
 
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const selectedKnowledgeBase = useMemo(
     () => knowledgeBases.find((item) => item.id === selectedKnowledgeBaseId) ?? null,
-    [knowledgeBases, selectedKnowledgeBaseId]
+    [knowledgeBases, selectedKnowledgeBaseId],
   );
 
+  // ── Load knowledge bases ──
   const loadKnowledgeBases = useCallback(async () => {
     setKnowledgeLoading(true);
     try {
@@ -130,9 +155,7 @@ export default function KnowledgeBasesPage() {
       const allRows = rows as KnowledgeBaseRecord[];
       setKnowledgeBases(allRows);
       setSelectedKnowledgeBaseId((currentId) => {
-        if (currentId && allRows.some((item) => item.id === currentId)) {
-          return currentId;
-        }
+        if (currentId && allRows.some((item) => item.id === currentId)) return currentId;
         return allRows[0]?.id ?? '';
       });
     } catch (error) {
@@ -142,39 +165,60 @@ export default function KnowledgeBasesPage() {
     }
   }, [knowledgeBaseApi]);
 
-  const loadDocuments = useCallback(async (knowledgeBaseId: number | '') => {
-    if (!knowledgeBaseId) {
-      setDocuments([]);
-      return;
-    }
+  // ── Load source files ──
+  const loadSourceFiles = useCallback(
+    async (knowledgeBaseId: number | '') => {
+      if (!knowledgeBaseId) {
+        setSourceFiles([]);
+        return;
+      }
+      setFileLoading(true);
+      try {
+        const rows = await knowledgeBaseApi.listSourceFiles.query({ knowledgeBaseId });
+        setSourceFiles(rows as SourceFileRecord[]);
+      } catch (error) {
+        setStatus(`加载文件列表失败: ${errorMessage(error)}`);
+      } finally {
+        setFileLoading(false);
+      }
+    },
+    [knowledgeBaseApi],
+  );
 
-    setDocumentLoading(true);
-    try {
-      const rows = await knowledgeBaseApi.listDocuments.query({ knowledgeBaseId });
-      setDocuments(rows as KnowledgeDocumentRecord[]);
-    } catch (error) {
-      setStatus(`加载文档失败: ${errorMessage(error)}`);
-    } finally {
-      setDocumentLoading(false);
-    }
-  }, [knowledgeBaseApi]);
+  // ── Load chunks for a source file ──
+  const loadChunks = useCallback(
+    async (sourceFileId: number) => {
+      setChunksLoading(true);
+      try {
+        const rows = await knowledgeBaseApi.listChunks.query({ sourceFileId });
+        setChunks(rows as ChunkRecord[]);
+      } catch (error) {
+        setStatus(`加载分块失败: ${errorMessage(error)}`);
+      } finally {
+        setChunksLoading(false);
+      }
+    },
+    [knowledgeBaseApi],
+  );
 
   useEffect(() => {
     void loadKnowledgeBases();
   }, [loadKnowledgeBases]);
 
   useEffect(() => {
-    void loadDocuments(selectedKnowledgeBaseId);
+    void loadSourceFiles(selectedKnowledgeBaseId);
     setSearchResults([]);
-  }, [loadDocuments, selectedKnowledgeBaseId]);
+    setExpandedFileId(null);
+    setChunks([]);
+  }, [loadSourceFiles, selectedKnowledgeBaseId]);
 
+  // ── Handlers ──
   const handleCreateKnowledgeBase = async () => {
     const name = newKnowledgeBaseName.trim();
     if (!name) {
       setStatus('请先填写知识库名称。');
       return;
     }
-
     setKnowledgeSaving(true);
     setStatus('');
     try {
@@ -182,16 +226,12 @@ export default function KnowledgeBasesPage() {
         name,
         description: newKnowledgeBaseDescription.trim() || undefined,
       });
-
       const createdId = (created as { id?: number }).id;
       setNewKnowledgeBaseName('');
       setNewKnowledgeBaseDescription('');
       setCreateDialogOpen(false);
-
       await loadKnowledgeBases();
-      if (typeof createdId === 'number') {
-        setSelectedKnowledgeBaseId(createdId);
-      }
+      if (typeof createdId === 'number') setSelectedKnowledgeBaseId(createdId);
       setStatus('知识库创建成功。');
     } catch (error) {
       setStatus(`创建知识库失败: ${errorMessage(error)}`);
@@ -201,11 +241,7 @@ export default function KnowledgeBasesPage() {
   };
 
   const handleDeleteKnowledgeBase = async (knowledgeBaseId: number) => {
-    const confirmed = window.confirm('删除知识库会一并删除该库下文档，确认继续吗？');
-    if (!confirmed) {
-      return;
-    }
-
+    if (!window.confirm('删除知识库会一并删除该库下所有文件和文档，确认继续吗？')) return;
     setKnowledgeDeletingId(knowledgeBaseId);
     setStatus('');
     try {
@@ -219,18 +255,76 @@ export default function KnowledgeBasesPage() {
     }
   };
 
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !selectedKnowledgeBaseId) return;
+
+    setUploading(true);
+    setStatus('');
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const response = await fetch(
+        `${UPLOAD_API_BASE}/api/knowledge-base/${selectedKnowledgeBaseId}/upload`,
+        { method: 'POST', body: formData },
+      );
+      const data = await response.json();
+
+      if (!response.ok) {
+        setStatus(`上传失败: ${data.error || '未知错误'}`);
+        return;
+      }
+
+      await Promise.all([loadKnowledgeBases(), loadSourceFiles(selectedKnowledgeBaseId)]);
+      setStatus(`文件上传成功，已切分为 ${data.chunksCount} 个分块。`);
+    } catch (error) {
+      setStatus(`上传失败: ${errorMessage(error)}`);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const handleDeleteSourceFile = async (sourceFileId: number) => {
+    if (!window.confirm('删除文件将同时删除所有分块，确认继续吗？')) return;
+    setFileDeletingId(sourceFileId);
+    setStatus('');
+    try {
+      await knowledgeBaseApi.deleteSourceFile.mutate({ sourceFileId });
+      if (expandedFileId === sourceFileId) {
+        setExpandedFileId(null);
+        setChunks([]);
+      }
+      await Promise.all([loadKnowledgeBases(), loadSourceFiles(selectedKnowledgeBaseId)]);
+      setStatus('文件已删除。');
+    } catch (error) {
+      setStatus(`删除文件失败: ${errorMessage(error)}`);
+    } finally {
+      setFileDeletingId(null);
+    }
+  };
+
+  const handleToggleChunks = async (sourceFileId: number) => {
+    if (expandedFileId === sourceFileId) {
+      setExpandedFileId(null);
+      setChunks([]);
+      return;
+    }
+    setExpandedFileId(sourceFileId);
+    await loadChunks(sourceFileId);
+  };
+
   const handleAddDocument = async () => {
     if (!selectedKnowledgeBaseId) {
       setStatus('请先选择一个知识库。');
       return;
     }
-
     const content = documentContent.trim();
     if (!content) {
       setStatus('请填写文档内容。');
       return;
     }
-
     setDocumentSaving(true);
     setStatus('');
     try {
@@ -242,10 +336,7 @@ export default function KnowledgeBasesPage() {
       });
       setDocumentTitle('');
       setDocumentContent('');
-      await Promise.all([
-        loadKnowledgeBases(),
-        loadDocuments(selectedKnowledgeBaseId),
-      ]);
+      await Promise.all([loadKnowledgeBases(), loadSourceFiles(selectedKnowledgeBaseId)]);
       setStatus('文档已添加。');
     } catch (error) {
       setStatus(`添加文档失败: ${errorMessage(error)}`);
@@ -254,39 +345,16 @@ export default function KnowledgeBasesPage() {
     }
   };
 
-  const handleDeleteDocument = async (documentId: number) => {
-    if (!selectedKnowledgeBaseId) {
-      return;
-    }
-
-    setDocumentDeletingId(documentId);
-    setStatus('');
-    try {
-      await knowledgeBaseApi.deleteDocument.mutate({ documentId });
-      await Promise.all([
-        loadKnowledgeBases(),
-        loadDocuments(selectedKnowledgeBaseId),
-      ]);
-      setStatus('文档已删除。');
-    } catch (error) {
-      setStatus(`删除文档失败: ${errorMessage(error)}`);
-    } finally {
-      setDocumentDeletingId(null);
-    }
-  };
-
   const handleSearch = async () => {
     if (!selectedKnowledgeBaseId) {
       setStatus('请先选择一个知识库。');
       return;
     }
-
     const query = searchQuery.trim();
     if (!query) {
       setStatus('请输入检索问题。');
       return;
     }
-
     setSearchLoading(true);
     setStatus('');
     try {
@@ -315,7 +383,7 @@ export default function KnowledgeBasesPage() {
               <div>
                 <CardTitle className="text-2xl text-[var(--ink-1)]">知识库管理</CardTitle>
                 <CardDescription className="mt-2 text-[var(--ink-2)]">
-                  左侧选择知识库，右侧查看文档列表并进行维护。
+                  左侧选择知识库，右侧上传文件或手动添加文档。
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
@@ -331,14 +399,13 @@ export default function KnowledgeBasesPage() {
         </Card>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-[340px_1fr]">
+          {/* ── 左侧知识库列表 ── */}
           <Card className="border-[var(--line-soft)] bg-white/80">
             <CardHeader>
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <CardTitle className="text-lg text-[var(--ink-1)]">知识库</CardTitle>
-                  <CardDescription className="text-[var(--ink-2)]">
-                    共 {knowledgeBases.length} 个
-                  </CardDescription>
+                  <CardDescription className="text-[var(--ink-2)]">共 {knowledgeBases.length} 个</CardDescription>
                 </div>
                 <div className="flex items-center gap-2">
                   <Button
@@ -351,14 +418,12 @@ export default function KnowledgeBasesPage() {
                   </Button>
                   <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
                     <DialogTrigger asChild>
-                      <Button className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]">
-                        创建
-                      </Button>
+                      <Button className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]">创建</Button>
                     </DialogTrigger>
                     <DialogContent>
                       <DialogHeader>
                         <DialogTitle>创建知识库</DialogTitle>
-                        <DialogDescription>创建后可在右侧添加文档并进行检索测试。</DialogDescription>
+                        <DialogDescription>创建后可在右侧上传文件或手动添加文档。</DialogDescription>
                       </DialogHeader>
                       <div className="space-y-3">
                         <div className="space-y-2">
@@ -444,7 +509,8 @@ export default function KnowledgeBasesPage() {
                               <div className="mt-1 line-clamp-2 text-xs text-[var(--ink-2)]">{item.description}</div>
                             ) : null}
                             <div className="mt-2 text-xs text-[var(--ink-2)]">
-                              文档 {item._count?.documents ?? 0} · 绑定 Bot {item._count?.bots ?? 0}
+                              文件 {item._count?.sourceFiles ?? 0} · 分块 {item._count?.documents ?? 0} · Bot{' '}
+                              {item._count?.bots ?? 0}
                             </div>
                           </div>
                           <Button
@@ -467,15 +533,17 @@ export default function KnowledgeBasesPage() {
             </CardContent>
           </Card>
 
+          {/* ── 右侧详情 ── */}
           <div className="space-y-4">
             {!selectedKnowledgeBase ? (
               <Card className="border-[var(--line-soft)] bg-white/80">
                 <CardContent className="p-6 text-sm text-[var(--ink-2)]">
-                  请选择左侧知识库后查看「文档列表」。
+                  请选择左侧知识库后查看文件列表。
                 </CardContent>
               </Card>
             ) : (
               <>
+                {/* 知识库信息 */}
                 <Card className="border-[var(--line-soft)] bg-white/80">
                   <CardHeader>
                     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -485,51 +553,139 @@ export default function KnowledgeBasesPage() {
                           {selectedKnowledgeBase.description || '暂无描述'}
                         </CardDescription>
                       </div>
-                      <Badge variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)]">
-                        当前文档数 {documents.length}
-                      </Badge>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)]">
+                          {sourceFiles.length} 个文件
+                        </Badge>
+                        <Badge variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)]">
+                          {selectedKnowledgeBase._count?.documents ?? 0} 个分块
+                        </Badge>
+                      </div>
                     </div>
                   </CardHeader>
                 </Card>
 
+                {/* 文件上传 */}
                 <Card className="border-[var(--line-soft)] bg-white/80">
                   <CardHeader>
-                    <CardTitle className="text-base text-[var(--ink-1)]">文档列表</CardTitle>
+                    <CardTitle className="text-base text-[var(--ink-1)]">上传文件</CardTitle>
                     <CardDescription className="text-[var(--ink-2)]">
-                      当前知识库中的文档会在 Bot 对话时用于检索召回。
+                      支持 PDF、DOCX、TXT、Markdown，单文件最大 20MB。
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    {documentLoading ? (
-                      <div className="text-sm text-[var(--ink-2)]">文档加载中...</div>
-                    ) : documents.length === 0 ? (
-                      <div className="text-sm text-[var(--ink-2)]">暂无文档。</div>
+                    <div className="flex items-center gap-3">
+                      <input
+                        ref={fileInputRef}
+                        type="file"
+                        accept={ACCEPTED_TYPES}
+                        onChange={(e) => void handleFileUpload(e)}
+                        disabled={uploading}
+                        className="text-sm text-[var(--ink-2)] file:mr-3 file:rounded-lg file:border file:border-[var(--line-soft)] file:bg-[var(--surface-1)] file:px-3 file:py-1.5 file:text-sm file:text-[var(--ink-1)] hover:file:bg-[var(--surface-2)]"
+                      />
+                      {uploading && <span className="text-sm text-[var(--ink-2)]">上传解析中...</span>}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* 文件列表（SourceFile 为主） */}
+                <Card className="border-[var(--line-soft)] bg-white/80">
+                  <CardHeader>
+                    <CardTitle className="text-base text-[var(--ink-1)]">文件列表</CardTitle>
+                    <CardDescription className="text-[var(--ink-2)]">
+                      点击文件可展开查看分块详情。
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {fileLoading ? (
+                      <div className="text-sm text-[var(--ink-2)]">文件加载中...</div>
+                    ) : sourceFiles.length === 0 ? (
+                      <div className="text-sm text-[var(--ink-2)]">暂无文件，请上传文件或手动添加文档。</div>
                     ) : (
                       <div className="space-y-2">
-                        {documents.map((doc) => {
-                          const deleting = documentDeletingId === doc.id;
-                          const preview = doc.content.length > 220
-                            ? `${doc.content.slice(0, 220)}...`
-                            : doc.content;
+                        {sourceFiles.map((file) => {
+                          const isExpanded = expandedFileId === file.id;
+                          const isDeleting = fileDeletingId === file.id;
                           return (
-                            <div key={doc.id} className="rounded-xl border border-[var(--line-soft)] bg-[var(--surface-1)] p-3">
-                              <div className="flex items-start justify-between gap-3">
+                            <div key={file.id} className="rounded-xl border border-[var(--line-soft)] bg-[var(--surface-1)]">
+                              <div
+                                role="button"
+                                tabIndex={0}
+                                className="flex cursor-pointer items-start justify-between gap-3 p-3"
+                                onClick={() => void handleToggleChunks(file.id)}
+                                onKeyDown={(event) => {
+                                  if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    void handleToggleChunks(file.id);
+                                  }
+                                }}
+                              >
                                 <div className="min-w-0">
-                                  <div className="text-sm font-medium text-[var(--ink-1)]">
-                                    {doc.title || '未命名文档'}
+                                  <div className="flex items-center gap-2">
+                                    <span className="text-sm font-medium text-[var(--ink-1)]">{file.fileName}</span>
+                                    <Badge variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)] text-xs">
+                                      {file.fileType}
+                                    </Badge>
                                   </div>
-                                  <div className="mt-1 text-xs text-[var(--ink-2)]">{formatDate(doc.createdAt)}</div>
+                                  <div className="mt-1 flex items-center gap-3 text-xs text-[var(--ink-2)]">
+                                    <span>{file._count?.documents ?? 0} chunks</span>
+                                    <span>{formatFileSize(file.fileSize)}</span>
+                                    <span>{formatDate(file.createdAt)}</span>
+                                  </div>
                                 </div>
-                                <Button
-                                  variant="outline"
-                                  className="border-[#dc6f6848] text-[#a53f37] hover:bg-[#fff4f3]"
-                                  onClick={() => void handleDeleteDocument(doc.id)}
-                                  disabled={documentSaving || deleting}
-                                >
-                                  {deleting ? '删除中...' : '删除'}
-                                </Button>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-[var(--ink-2)]">{isExpanded ? '收起' : '展开'}</span>
+                                  <Button
+                                    variant="outline"
+                                    className="border-[#dc6f6848] text-[#a53f37] hover:bg-[#fff4f3]"
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      void handleDeleteSourceFile(file.id);
+                                    }}
+                                    disabled={isDeleting}
+                                  >
+                                    {isDeleting ? '删除中...' : '删除'}
+                                  </Button>
+                                </div>
                               </div>
-                              <div className="mt-2 whitespace-pre-wrap text-xs text-[var(--ink-2)]">{preview}</div>
+
+                              {/* 展开的 chunk 列表 */}
+                              {isExpanded && (
+                                <div className="border-t border-[var(--line-soft)] p-3">
+                                  {chunksLoading ? (
+                                    <div className="text-xs text-[var(--ink-2)]">分块加载中...</div>
+                                  ) : chunks.length === 0 ? (
+                                    <div className="text-xs text-[var(--ink-2)]">无分块数据。</div>
+                                  ) : (
+                                    <div className="space-y-2">
+                                      {chunks.map((chunk) => {
+                                        const preview =
+                                          chunk.content.length > 160
+                                            ? `${chunk.content.slice(0, 160)}...`
+                                            : chunk.content;
+                                        return (
+                                          <div
+                                            key={chunk.id}
+                                            className="rounded-lg border border-[var(--line-soft)] bg-white p-2"
+                                          >
+                                            <div className="flex items-center gap-2">
+                                              <Badge variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)] text-xs">
+                                                #{chunk.chunkIndex}
+                                              </Badge>
+                                              {chunk.title && (
+                                                <span className="text-xs text-[var(--ink-2)]">{chunk.title}</span>
+                                              )}
+                                            </div>
+                                            <div className="mt-1 whitespace-pre-wrap text-xs text-[var(--ink-2)]">
+                                              {preview}
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           );
                         })}
@@ -538,29 +694,33 @@ export default function KnowledgeBasesPage() {
                   </CardContent>
                 </Card>
 
+                {/* 手动添加文档 */}
                 <Card className="border-[var(--line-soft)] bg-white/80">
                   <CardHeader>
-                    <CardTitle className="text-base text-[var(--ink-1)]">添加文档</CardTitle>
+                    <CardTitle className="text-base text-[var(--ink-1)]">手动添加文档</CardTitle>
+                    <CardDescription className="text-[var(--ink-2)]">
+                      直接粘贴文本内容作为单个文档入库。
+                    </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-3">
                     <Input
                       value={documentTitle}
                       onChange={(event) => setDocumentTitle(event.target.value)}
                       placeholder="文档标题（可选）"
-                      disabled={documentSaving || documentLoading}
+                      disabled={documentSaving}
                     />
                     <Textarea
                       value={documentContent}
                       onChange={(event) => setDocumentContent(event.target.value)}
                       rows={6}
                       placeholder="粘贴文档正文内容..."
-                      disabled={documentSaving || documentLoading}
+                      disabled={documentSaving}
                     />
                     <div className="flex items-center justify-end">
                       <Button
                         className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
                         onClick={() => void handleAddDocument()}
-                        disabled={documentSaving || documentLoading}
+                        disabled={documentSaving}
                       >
                         {documentSaving ? '添加中...' : '添加文档'}
                       </Button>
@@ -568,6 +728,7 @@ export default function KnowledgeBasesPage() {
                   </CardContent>
                 </Card>
 
+                {/* 检索测试 */}
                 <Card className="border-[var(--line-soft)] bg-white/80">
                   <CardHeader>
                     <CardTitle className="text-base text-[var(--ink-1)]">检索测试</CardTitle>
@@ -612,7 +773,10 @@ export default function KnowledgeBasesPage() {
                     {searchResults.length > 0 ? (
                       <div className="space-y-2">
                         {searchResults.map((item, index) => (
-                          <div key={`${index}-${item.score}`} className="rounded-xl border border-[var(--line-soft)] bg-[var(--surface-1)] p-3">
+                          <div
+                            key={`${index}-${item.score}`}
+                            className="rounded-xl border border-[var(--line-soft)] bg-[var(--surface-1)] p-3"
+                          >
                             <div className="flex items-center justify-between gap-2">
                               <div className="text-sm font-medium text-[var(--ink-1)]">
                                 {item.title || `命中结果 ${index + 1}`}

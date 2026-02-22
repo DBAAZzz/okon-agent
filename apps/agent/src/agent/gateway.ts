@@ -69,11 +69,18 @@ export async function runAgent(
 
   const memories = userMessage ? await memoryStore.recent({ sessionId: String(sessionId) }, 3) : []
 
-  // RAG: 从 Bot 绑定的知识库中检索相关文档
+  // RAG: 从 Bot 绑定的知识库中检索相关文档，按字符预算截取
+  const MAX_CONTEXT_CHARS = 4000
   let knowledgeDocs: { title?: string; content: string }[] = []
   if (userMessage && options.bot.id && options.knowledgeStore) {
     try {
-      knowledgeDocs = await options.knowledgeStore.searchForBot(options.bot.id, userMessage, 5)
+      const allDocs = await options.knowledgeStore.searchForBot(options.bot.id, userMessage, 10)
+      let total = 0
+      for (const doc of allDocs) {
+        total += doc.content.length
+        if (total > MAX_CONTEXT_CHARS) break
+        knowledgeDocs.push(doc)
+      }
     } catch (err) {
       logger.warn('知识库检索失败，跳过 RAG', err)
     }

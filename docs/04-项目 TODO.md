@@ -1,6 +1,6 @@
 # 项目 TODO（基于当前代码）
 
-更新时间：2026-02-18
+更新时间：2026-02-21
 
 ## 1. 现状快照（已完成）
 
@@ -11,25 +11,19 @@
 - [x] 记忆存储与注入（稀疏 + recent）：`apps/agent/src/capabilities/memory/*`
 - [x] Embeddings 能力与混合检索 API：`apps/agent/src/capabilities/embeddings/*`、`apps/agent/src/trpc/router.ts`
 - [x] Channel 基础能力（Feishu + 配置热更新）：`apps/agent/src/channel/*`、`apps/web/src/app/channel/page.tsx`
+- [x] RAG 主链路打通：`apps/agent/src/agent/gateway.ts`（检索 + 注入）、`apps/agent/src/agent/prompt.ts`（参考文档区块）
+- [x] 文档入库 pipeline（上传 -> 分块 -> 索引）：`apps/agent/src/routes/upload.ts`、`apps/agent/src/utils/chunker.ts`、`apps/agent/src/utils/file-parser.ts`、`apps/agent/src/capabilities/knowledge/knowledge-store.ts`
 
 ## 2. P0（当前迭代必须完成）
 
-- [ ] 打通 RAG 主链路（Agent 对话实时检索文档）
-  - 任务：在 `runAgent()` 中加入文档检索步骤，将结果注入系统提示词或工具结果上下文。
-  - 任务：定义检索触发条件（关键词/意图/显式开关），避免每轮都检索。
-  - 验收：提问命中文档时，回答内容能引用到 `embeddings.search` 返回的文档片段。
-
-- [ ] 完成文档入库 pipeline（上传 -> 分块 -> 索引）
-  - 任务：新增文档上传接口，支持纯文本或 markdown。
-  - 任务：实现 chunk 策略（大小、重叠、metadata）。
-  - 验收：可批量上传文档并在检索中稳定命中对应 chunk。
-
 - [ ] 记忆召回从 recent 升级为相关性召回
-  - 任务：在 `memoryStore.recent()` 基础上引入 `memoryStore.search()` 混合策略（最近 + 相似）。
-  - 任务：为记忆注入增加 token 限额与截断规则。
+  - 现状：`gateway.ts` 中仅调用 `memoryStore.recent(3)`，`memoryStore.search()` 已实现但未使用。
+  - 任务：在 `runAgent()` 中将 recent 替换为 `search() + recent()` 混合策略（相似优先，补充最近）。
+  - 任务：为记忆注入增加字符限额与截断规则（对齐文档检索的 MAX_CONTEXT_CHARS 机制）。
   - 验收：多轮追问场景下，召回内容与当前问题相关性明显高于仅 recent。
 
 - [ ] 建立最小评测回归
+  - 现状：项目中无 `eval/` 目录，无任何测试用例。
   - 任务：新增 `eval` 目录和用例集（工具调用、检索命中、审批流程）。
   - 任务：定义可在 CI 执行的 smoke/e2e 脚本。
   - 验收：每次改动可跑固定用例并输出通过率。
@@ -73,8 +67,8 @@
 
 ## 5. 建议执行顺序
 
-1. RAG 主链路打通
-2. 文档入库 pipeline
+1. ~~RAG 主链路打通~~ ✅
+2. ~~文档入库 pipeline~~ ✅
 3. 记忆召回升级
 4. 评测回归
 5. Guardrails + Observability

@@ -34,21 +34,72 @@ export function createKnowledgeStore(
       } catch {
         logger.warn('Qdrant collection 删除失败（可能不存在）', { collection: collectionName(id) })
       }
-      // 再删 Prisma（级联删除 Document + BotKnowledgeBase）
+      // 再删 Prisma（级联删除 SourceFile → Document + BotKnowledgeBase）
       await prisma.knowledgeBase.delete({ where: { id } })
     },
 
     async list() {
       return prisma.knowledgeBase.findMany({
         orderBy: { createdAt: 'desc' },
-        include: { _count: { select: { documents: true, bots: true } } },
+        include: { _count: { select: { documents: true, sourceFiles: true, bots: true } } },
       })
     },
 
     async get(id: number) {
       return prisma.knowledgeBase.findUnique({
         where: { id },
-        include: { _count: { select: { documents: true, bots: true } } },
+        include: { _count: { select: { documents: true, sourceFiles: true, bots: true } } },
+      })
+    },
+
+    // ── SourceFile 管理 ──
+
+    async createSourceFile(
+      knowledgeBaseId: number,
+      fileName: string,
+      fileType: string,
+      fileSize: number,
+      checksum?: string,
+    ) {
+      return prisma.sourceFile.create({
+        data: { knowledgeBaseId, fileName, fileType, fileSize, checksum },
+      })
+    },
+
+    async listSourceFiles(knowledgeBaseId: number) {
+      return prisma.sourceFile.findMany({
+        where: { knowledgeBaseId },
+        orderBy: { createdAt: 'desc' },
+        include: { _count: { select: { documents: true } } },
+      })
+    },
+
+    async deleteSourceFile(sourceFileId: number) {
+      const sourceFile = await prisma.sourceFile.findUnique({
+        where: { id: sourceFileId },
+        include: { documents: { select: { qdrantPointId: true, knowledgeBaseId: true } } },
+      })
+      if (!sourceFile) return false
+
+      // 批量删除 Qdrant points
+      const pointIds = sourceFile.documents
+        .map((d) => d.qdrantPointId)
+        .filter((id): id is string => !!id)
+      if (pointIds.length > 0 && sourceFile.documents[0]) {
+        const kbId = sourceFile.documents[0].knowledgeBaseId
+        await qdrant.delete(collectionName(kbId), { points: pointIds })
+          .catch((err) => logger.warn('批量删除 Qdrant points 失败', err))
+      }
+
+      // 级联删除 SourceFile → Documents
+      await prisma.sourceFile.delete({ where: { id: sourceFileId } })
+      logger.info('源文件已删除', { sourceFileId, chunks: sourceFile.documents.length })
+      return true
+    },
+
+    async findSourceFileByChecksum(knowledgeBaseId: number, checksum: string) {
+      return prisma.sourceFile.findUnique({
+        where: { knowledgeBaseId_checksum: { knowledgeBaseId, checksum } },
       })
     },
 
@@ -60,6 +111,16 @@ export function createKnowledgeStore(
       title?: string,
       metadata?: Record<string, any>,
     ) {
+      // 手动添加的文档也走 SourceFile，fileType = 'manual'
+      const sourceFile = await prisma.sourceFile.create({
+        data: {
+          knowledgeBaseId,
+          fileName: title || '手动添加',
+          fileType: 'manual',
+          fileSize: Buffer.byteLength(content, 'utf-8'),
+        },
+      })
+
       const store = createVectorStore(qdrant, collectionName(knowledgeBaseId))
 
       const embedding = await embeddings.embed(content)
@@ -73,6 +134,8 @@ export function createKnowledgeStore(
       const doc = await prisma.document.create({
         data: {
           knowledgeBaseId,
+          sourceFileId: sourceFile.id,
+          chunkIndex: 0,
           title,
           content,
           qdrantPointId: point.id,
@@ -82,6 +145,43 @@ export function createKnowledgeStore(
 
       logger.info('文档已添加', { docId: doc.id, kbId: knowledgeBaseId, qdrantPointId: point.id })
       return doc
+    },
+
+    async addDocumentsBatch(
+      knowledgeBaseId: number,
+      sourceFileId: number,
+      chunks: { content: string; title: string; chunkIndex: number }[],
+    ) {
+      if (chunks.length === 0) return []
+
+      const store = createVectorStore(qdrant, collectionName(knowledgeBaseId))
+
+      // 1. 批量 embedding（1次 API 调用）
+      const allEmbeddings = await embeddings.embedBatch(chunks.map((c) => c.content))
+      // 2. 批量 sparse（本地计算）
+      const allSparse = chunks.map((c) => textToSparseVector(c.content))
+      // 3. 批量 Qdrant upsert
+      const points = await store.addBatch(
+        chunks.map((c, i) => ({
+          payload: { content: c.content, title: c.title, metadata: {} },
+          embedding: allEmbeddings[i],
+          sparseVector: allSparse[i],
+        })),
+      )
+      // 4. 批量 Prisma createMany
+      await prisma.document.createMany({
+        data: chunks.map((c, i) => ({
+          knowledgeBaseId,
+          sourceFileId,
+          chunkIndex: c.chunkIndex,
+          title: c.title,
+          content: c.content,
+          qdrantPointId: points[i].id,
+        })),
+      })
+
+      logger.info('批量文档入库完成', { kbId: knowledgeBaseId, sourceFileId, chunks: chunks.length })
+      return points
     },
 
     async deleteDocument(documentId: number) {
@@ -107,6 +207,22 @@ export function createKnowledgeStore(
           title: true,
           content: true,
           metadata: true,
+          chunkIndex: true,
+          sourceFileId: true,
+          createdAt: true,
+        },
+      })
+    },
+
+    async listChunks(sourceFileId: number) {
+      return prisma.document.findMany({
+        where: { sourceFileId },
+        orderBy: { chunkIndex: 'asc' },
+        select: {
+          id: true,
+          title: true,
+          content: true,
+          chunkIndex: true,
           createdAt: true,
         },
       })
