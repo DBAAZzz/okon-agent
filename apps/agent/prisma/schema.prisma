@@ -6,22 +6,121 @@ datasource db {
   provider = "postgresql"
 }
 
+model Bot {
+  id             Int               @id @default(autoincrement())
+  name           String
+  provider       String            @default("deepseek")
+  model          String            @default("deepseek-chat")
+  baseURL        String?
+  apiKey         String
+  systemPrompt   String?
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+  sessions       Session[]
+  channelConfigs ChannelConfig[]
+  knowledgeBases BotKnowledgeBase[]
+}
+
 model Session {
-  id        String    @id @default(cuid())
-  title     String?
-  model     String    @default("deepseek-chat")
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt
-  messages  Message[]
+  id              Int              @id @default(autoincrement())
+  title           String?
+  source          String           @default("web") // "web" | platform name e.g. "feishu"
+  botId           Int?
+  bot             Bot?             @relation(fields: [botId], references: [id])
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  messages        Message[]
+  channelMappings ChannelMapping[]
+}
+
+model ChannelConfig {
+  id        Int              @id @default(autoincrement())
+  platform  String
+  name      String
+  enabled   Boolean          @default(true)
+  config    Json             // 平台凭证，如 { appId, appSecret }
+  botId     Int              @unique // 一个 bot 最多绑定一个 channel
+  bot       Bot              @relation(fields: [botId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  mappings  ChannelMapping[]
+}
+
+model ChannelMapping {
+  id              Int           @id @default(autoincrement())
+  channelConfigId Int
+  channelConfig   ChannelConfig @relation(fields: [channelConfigId], references: [id], onDelete: Cascade)
+  externalChatId  String
+  sessionId       Int
+  session         Session       @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([channelConfigId, externalChatId])
+  @@index([sessionId])
 }
 
 model Message {
-  id        String   @id @default(cuid())
-  sessionId String
+  id        Int      @id @default(autoincrement())
+  sessionId Int
   session   Session  @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   role      String
   content   Json
   createdAt DateTime @default(now())
 
   @@index([sessionId])
+}
+
+model KnowledgeBase {
+  id          Int                @id @default(autoincrement())
+  name        String
+  description String?
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  documents   Document[]
+  sourceFiles SourceFile[]
+  bots        BotKnowledgeBase[]
+}
+
+model SourceFile {
+  id              Int           @id @default(autoincrement())
+  knowledgeBaseId Int
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  fileName        String
+  fileType        String        // pdf, docx, txt, md, manual
+  fileSize        Int           @default(0)
+  checksum        String?
+  createdAt       DateTime      @default(now())
+  documents       Document[]
+
+  @@unique([knowledgeBaseId, checksum])
+  @@index([knowledgeBaseId])
+}
+
+model Document {
+  id              Int           @id @default(autoincrement())
+  knowledgeBaseId Int
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  sourceFileId    Int
+  sourceFile      SourceFile    @relation(fields: [sourceFileId], references: [id], onDelete: Cascade)
+  chunkIndex      Int           @default(0)
+  title           String?
+  content         String
+  qdrantPointId   String?
+  metadata        Json?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([sourceFileId, chunkIndex])
+  @@index([knowledgeBaseId])
+}
+
+model BotKnowledgeBase {
+  id              Int           @id @default(autoincrement())
+  botId           Int
+  bot             Bot           @relation(fields: [botId], references: [id], onDelete: Cascade)
+  knowledgeBaseId Int
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id], onDelete: Cascade)
+  createdAt       DateTime      @default(now())
+
+  @@unique([botId, knowledgeBaseId])
 }

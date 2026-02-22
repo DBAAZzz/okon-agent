@@ -8,9 +8,8 @@
     "dev": "pnpm --parallel --stream dev",
     "dev:agent": "pnpm --filter @okon/agent dev",
     "dev:web": "pnpm --filter @okon/web dev",
-    "build": "pnpm --filter @okon/shared build && pnpm --filter @okon/agent... --filter @okon/web... build",
-    "typecheck": "pnpm --recursive --stream typecheck",
-    "eval": "tsx apps/agent/scripts/eval.ts"
+    "build": "pnpm --filter @okon/shared --filter @okon/ui build && pnpm --filter @okon/agent... --filter @okon/web... build",
+    "typecheck": "pnpm --recursive --stream typecheck"
   },
   "devDependencies": {
     "@types/node": "^25.2.3",

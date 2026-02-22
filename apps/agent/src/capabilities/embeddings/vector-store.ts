@@ -125,6 +125,32 @@ export function createVectorStore<TPayload extends Record<string, unknown> = Rec
       }
     },
 
+    async addBatch(
+      items: { payload: TPayload; embedding: number[]; sparseVector: SparseVector }[],
+    ): Promise<PointData<TPayload>[]> {
+      if (items.length === 0) return []
+      await ensureCollection(items[0].embedding.length)
+
+      const points = items.map((item) => ({
+        id: randomUUID(),
+        vector: {
+          [DENSE_VECTOR_NAME]: item.embedding,
+          [SPARSE_VECTOR_NAME]: item.sparseVector,
+        },
+        payload: item.payload as Record<string, unknown>,
+      }))
+
+      await client.upsert(collectionName, { points })
+      logger.debug('批量写入 Qdrant', { count: points.length })
+
+      return points.map((p, i) => ({
+        id: p.id,
+        payload: items[i].payload,
+        embedding: items[i].embedding,
+        sparseVector: items[i].sparseVector,
+      }))
+    },
+
     async search(
       queryEmbedding: number[] | null,
       querySparseVector: SparseVector,

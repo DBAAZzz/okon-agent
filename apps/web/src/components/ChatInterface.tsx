@@ -1,99 +1,86 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { useSSEStream } from '@/hooks/useSSEStream';
+import { useMemo, useCallback } from 'react';
+import { useChat } from '@ai-sdk/react';
+import {
+  DefaultChatTransport,
+  lastAssistantMessageIsCompleteWithApprovalResponses,
+} from 'ai';
 import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { ApprovalRequest } from './ApprovalRequest';
-import { trpc } from '@/lib/trpc';
-import type { Message } from '@/hooks/useSSEStream';
+import { useChatHistory } from '@/hooks/useChatHistory';
+import {
+  extractPendingApprovals,
+  toDisplayMessages,
+} from '@/lib/chat-transformers';
 
 type Props = {
-  sessionId: string;
+  sessionId: number;
 };
 
 export function ChatInterface({ sessionId }: Props) {
-  const {
-    messages,
-    setMessages,
-    pendingApprovals,
-    isStreaming,
-    error,
-    sendMessage,
-    continueAfterApproval,
-    setPendingApprovals
-  } = useSSEStream(sessionId);
+  const transport = useMemo(
+    () =>
+      new DefaultChatTransport({
+        api: 'http://localhost:3001/api/chat',
+        body: { sessionId },
+      }),
+    [sessionId]
+  );
 
-  // 切换会话时从 DB 加载历史消息
-  useEffect(() => {
-    let cancelled = false;
-    async function loadHistory() {
-      try {
-        const { history } = await trpc.chat.getHistory.query({ sessionId });
-        if (cancelled) return;
-        // 将 DB 中的 ModelMessage 转为前端 Message 格式
-        const msgs: Message[] = [];
-        for (const msg of history) {
-          const m = msg as any;
-          if (m.role === 'user' && typeof m.content === 'string') {
-            msgs.push({ role: 'user', content: m.content });
-          } else if (m.role === 'assistant') {
-            // assistant content 可能是数组或字符串
-            const text = Array.isArray(m.content)
-              ? m.content
-                  .filter((p: any) => p.type === 'text')
-                  .map((p: any) => p.text)
-                  .join('')
-              : typeof m.content === 'string'
-                ? m.content
-                : '';
-            if (text) {
-              msgs.push({ role: 'assistant', content: text });
-            }
-          }
-        }
-        setMessages(msgs);
-      } catch (err) {
-        console.error('Failed to load history:', err);
-      }
-    }
-    loadHistory();
-    return () => { cancelled = true; };
-  }, [sessionId, setMessages]);
+  const { messages, setMessages, status, error, sendMessage, addToolApprovalResponse } = useChat({
+    id: String(sessionId),
+    transport,
+    sendAutomaticallyWhen: lastAssistantMessageIsCompleteWithApprovalResponses,
+  });
 
-  const handleApproval = useCallback(async (approvalId: string, approved: boolean) => {
-    try {
-      const result = await trpc.approval.respond.mutate({
-        sessionId,
-        approvalId,
-        approved,
-        reason: approved ? 'User approved in web UI' : 'User denied in web UI'
-      });
+  useChatHistory(sessionId, setMessages);
 
-      if (result.shouldContinue) {
-        continueAfterApproval();
-      }
-    } catch (err) {
-      console.error('Failed to respond to approval:', err);
-      alert('审批响应失败，请重试');
-    }
-  }, [sessionId, continueAfterApproval]);
+  const pendingApprovals = useMemo(() => extractPendingApprovals(messages), [messages]);
+  const displayMessages = useMemo(() => toDisplayMessages(messages), [messages]);
+  const isStreaming = status === 'submitted' || status === 'streaming';
+
+  const handleSend = useCallback((text: string) => {
+    if (!text.trim()) return;
+    sendMessage({ text });
+  }, [sendMessage]);
+
+  const handleApproval = useCallback((approvalId: string, approved: boolean) => {
+    addToolApprovalResponse({
+      id: approvalId,
+      approved,
+      reason: approved ? 'User approved in web UI' : 'User denied in web UI',
+    });
+  }, [addToolApprovalResponse]);
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <section className="h-full flex flex-col bg-[linear-gradient(180deg,rgba(255,255,255,0.34),rgba(255,255,255,0.62))]">
+      <header className="shrink-0 border-b border-[var(--line-soft)] px-4 md:px-6 py-3 bg-white/62 backdrop-blur-sm">
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--ink-2)]">Active Session</div>
+            <div className="text-sm font-semibold text-[var(--ink-1)] font-mono">#{sessionId}</div>
+          </div>
+          <div className="rounded-full border border-[var(--line-soft)] bg-white/80 px-3 py-1.5 text-xs text-[var(--ink-2)]">
+            状态: {status === 'ready' ? '空闲' : status === 'error' ? '异常' : '处理中'}
+          </div>
+        </div>
+      </header>
+
       {/* Messages */}
-      <MessageList messages={messages} />
+      <MessageList messages={displayMessages} />
 
       {/* Error */}
       {error ? (
-        <div className="mx-4 my-2 p-3 bg-red-100 border border-red-400 text-red-700 rounded-lg">
-          <strong>错误: </strong>{error}
+        <div className="mx-4 md:mx-6 my-2 rounded-xl border border-[#b33b2f66] bg-[#fef2f1] px-3 py-2 text-[#8b2219] text-sm">
+          <strong>错误: </strong>{error.message}
         </div>
       ) : null}
 
       {/* Streaming indicator */}
       {isStreaming && pendingApprovals.length === 0 && (
-        <div className="mx-4 mb-2 text-sm text-gray-600 italic">
+        <div className="mx-4 md:mx-6 mb-2 text-sm text-[var(--ink-2)] italic">
           AI 正在思考...
         </div>
       )}
@@ -107,9 +94,9 @@ export function ChatInterface({ sessionId }: Props) {
 
       {/* Input */}
       <MessageInput
-        onSend={sendMessage}
-        disabled={pendingApprovals.length > 0}
+        onSend={handleSend}
+        disabled={pendingApprovals.length > 0 || isStreaming}
       />
-    </div>
+    </section>
   );
 }

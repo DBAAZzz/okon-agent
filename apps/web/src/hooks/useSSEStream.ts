@@ -9,7 +9,7 @@ export type Message = {
   reasoning?: string;
 };
 
-export function useSSEStream(sessionId: string) {
+export function useSSEStream(sessionId: number) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [pendingApprovals, setPendingApprovals] = useState<ApprovalRequestPart[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);

@@ -11,6 +11,7 @@ const SPARSE_VECTOR_NAME = 'bm25'
 
 export function createMemoryStore(client: QdrantClient) {
   let collectionReady = false
+  let createdAtIndexReady = false
 
   async function ensureCollection() {
     if (collectionReady) return
@@ -28,6 +29,20 @@ export function createMemoryStore(client: QdrantClient) {
       })
       collectionReady = true
       logger.info('记忆集合创建成功', { collection: COLLECTION_NAME })
+    }
+
+    if (!createdAtIndexReady) {
+      try {
+        await client.createPayloadIndex(COLLECTION_NAME, {
+          field_name: 'createdAt',
+          field_schema: 'datetime',
+        })
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error)
+        logger.warn('createdAt 索引创建失败，将继续尝试按时间排序查询', { message })
+      } finally {
+        createdAtIndexReady = true
+      }
     }
   }
 
@@ -126,6 +141,48 @@ export function createMemoryStore(client: QdrantClient) {
           filter: payload.filter,
           createdAt: payload.createdAt,
           score: r.score,
+        }
+      })
+    },
+
+    async recent(
+      filter?: Partial<MemoryFilter>,
+      limit = 5,
+    ): Promise<MemorySearchResult[]> {
+      if (!collectionReady) {
+        try {
+          await ensureCollection()
+        } catch {
+          return []
+        }
+      }
+
+      const must = filter
+        ? Object.entries(filter).map(([key, value]) => ({
+            key: `filter.${key}`,
+            match: { value },
+          }))
+        : []
+
+      const result = await client.scroll(COLLECTION_NAME, {
+        limit,
+        with_payload: true,
+        with_vector: false,
+        order_by: {
+          key: 'createdAt',
+          direction: 'desc',
+        },
+        ...(must.length > 0 && { filter: { must } }),
+      })
+
+      return result.points.map((p) => {
+        const payload = p.payload as unknown as MemoryPayload
+        return {
+          id: String(p.id),
+          content: payload.content,
+          filter: payload.filter,
+          createdAt: payload.createdAt,
+          score: 0,
         }
       })
     },
