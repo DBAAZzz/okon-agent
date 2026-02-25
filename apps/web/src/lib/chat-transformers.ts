@@ -199,6 +199,10 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
   const messages: UIMessage[] = [];
   const toolByCallId = new Map<string, any>();
   const toolByApprovalId = new Map<string, any>();
+  const summaryPrefix = "[Previous conversation summary]";
+  const summaryAck =
+    "Understood. I have the context from our previous conversation. How can I help you next?";
+  let skipNextSummaryAck = false;
 
   const ensureAssistantMessage = (index: number): UIMessage => {
     const last = messages.at(-1);
@@ -263,6 +267,10 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
                 .map((part: any) => part.text)
                 .join("")
             : "";
+      if (text.startsWith(summaryPrefix)) {
+        skipNextSummaryAck = true;
+        continue;
+      }
       if (!text.trim()) continue;
       messages.push({
         id,
@@ -273,6 +281,25 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
     }
 
     if (msg.role === "assistant") {
+      if (skipNextSummaryAck) {
+        const text =
+          typeof msg.content === "string"
+            ? msg.content
+            : Array.isArray(msg.content)
+              ? msg.content
+                  .filter(
+                    (part: any) =>
+                      part.type === "text" && typeof part.text === "string",
+                  )
+                  .map((part: any) => part.text)
+                  .join("")
+              : "";
+        if (text.trim() === summaryAck) {
+          skipNextSummaryAck = false;
+          continue;
+        }
+        skipNextSummaryAck = false;
+      }
       const uiMessage: UIMessage = {
         id,
         role: "assistant",

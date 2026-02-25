@@ -40,15 +40,32 @@ export async function registerChatRoutes(fastify: FastifyInstance) {
       const agentStream = await gateway.runAgent(sessionId, ctx.userMessage, { bot: session.bot!, knowledgeStore })
       logger.info('开始 UI 流式响应', { sessionId, model: agentStream.modelId })
 
+      let finalized = false
+      const finalizeOnce = async () => {
+        if (finalized) return
+        finalized = true
+        try {
+          await gateway.finalizeStream(sessionId, agentStream)
+        } catch (err) {
+          logger.error('UI 流收尾失败', err)
+        }
+      }
+
       // 通过 UI Message Stream 协议推送给前端
       setUIMessageStreamHeaders(reply)
       await pipeUIMessageChunks(
         reply,
-        agentStream.result.toUIMessageStream({ originalMessages: messages as any })
+        agentStream.result.toUIMessageStream({
+          originalMessages: messages as any,
+          // 确保流结束前完成落库，前端 onFinish 查询能读到最新累计
+          onFinish: async () => {
+            await finalizeOnce()
+          },
+        })
       )
 
-      // 收尾：存消息、处理审批、存记忆
-      await gateway.finalizeStream(sessionId, agentStream)
+      // 兜底收尾：防止 onFinish 未触发时遗漏落库
+      await finalizeOnce()
     } catch (err) {
       logger.error('UI 流式响应失败', err)
       if (!reply.raw.writableEnded) {

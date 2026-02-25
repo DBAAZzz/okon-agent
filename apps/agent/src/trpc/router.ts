@@ -55,6 +55,84 @@ export const appRouter = router({
       }),
   }),
 
+  compaction: router({
+    /** 获取 session 的所有 compaction 摘要 */
+    getSessionSummaries: publicProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return ctx.req.server.prisma.compactionSummary.findMany({
+          where: { sessionId: input.sessionId },
+          orderBy: { createdAt: 'desc' },
+        });
+      }),
+
+    /** 获取某次 compaction 覆盖的原始消息 */
+    getCompactedMessages: publicProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        messageIdFrom: z.number(),
+        messageIdTo: z.number(),
+      }))
+      .query(async ({ input, ctx }) => {
+        return ctx.req.server.prisma.message.findMany({
+          where: {
+            sessionId: input.sessionId,
+            id: { gte: input.messageIdFrom, lte: input.messageIdTo },
+            compactedAt: { not: null },
+          },
+          orderBy: { id: 'asc' },
+        });
+      }),
+  }),
+
+  tokenUsage: router({
+    getSessionSummary: publicProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const agg = await ctx.req.server.prisma.tokenUsage.aggregate({
+          where: { sessionId: input.sessionId },
+          _sum: {
+            inputTokens: true,
+            outputTokens: true,
+            totalTokens: true,
+          },
+          _count: true,
+        });
+
+        return {
+          totalInputTokens: agg._sum.inputTokens ?? 0,
+          totalOutputTokens: agg._sum.outputTokens ?? 0,
+          totalTokens: agg._sum.totalTokens ?? 0,
+          requestCount: agg._count,
+        };
+      }),
+
+    getSessionDetails: publicProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        cursor: z.number().optional(),
+        limit: z.number().min(1).max(100).default(20),
+      }))
+      .query(async ({ input, ctx }) => {
+        const items = await ctx.req.server.prisma.tokenUsage.findMany({
+          where: {
+            sessionId: input.sessionId,
+            ...(input.cursor ? { id: { lt: input.cursor } } : {}),
+          },
+          orderBy: { id: 'desc' },
+          take: input.limit + 1,
+        });
+
+        const hasMore = items.length > input.limit;
+        if (hasMore) items.pop();
+
+        return {
+          items,
+          nextCursor: hasMore ? items[items.length - 1]?.id : undefined,
+        };
+      }),
+  }),
+
   approval: router({
     // 处理审批响应
     respond: publicProcedure

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
+import type { ReactNode } from 'react';
 import type { ChatMessage } from '../types/chat';
 
 function formatValue(value: unknown): string {
@@ -32,7 +33,13 @@ function toStateLabel(state: string): string {
   }
 }
 
-export function MessageList({ messages }: { messages: ChatMessage[] }) {
+export function MessageList({
+  messages,
+  header,
+}: {
+  messages: ChatMessage[];
+  header?: ReactNode;
+}) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when messages change
@@ -42,6 +49,7 @@ export function MessageList({ messages }: { messages: ChatMessage[] }) {
 
   return (
     <div className="flex-1 overflow-y-auto p-4 md:p-6 space-y-4">
+      {header}
       {messages.length === 0 && (
         <div className="mt-10 rounded-2xl border border-[var(--line-soft)] bg-white/70 p-8 text-center text-[var(--ink-2)] rise-in">
           <p className="text-2xl text-[var(--ink-1)]">欢迎使用 Okon Agent</p>
