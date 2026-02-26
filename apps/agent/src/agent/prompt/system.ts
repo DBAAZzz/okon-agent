@@ -1,5 +1,5 @@
 export interface PromptContext {
-  memories?: string[]
+  memoryMarkdown?: string
   /** Bot 自定义 system prompt，若提供则替换默认指令 */
   botPrompt?: string
   /** RAG 检索到的知识库文档 */
@@ -39,8 +39,8 @@ export function buildSystemPrompt(context?: PromptContext): string {
     )
   }
 
-  if (context?.memories?.length) {
-    parts.push('\n\n## 相关记忆\n' + context.memories.join('\n'))
+  if (context?.memoryMarkdown?.trim()) {
+    parts.push('\n\n## 用户长期记忆\n' + context.memoryMarkdown)
   }
 
   parts.push(`\n\n${SUMMARY_GUARD}`)

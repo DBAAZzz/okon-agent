@@ -21,3 +21,6 @@ out
 *.log
 npm-debug.log*
 pnpm-debug.log*
+
+# Runtime data
+apps/agent/data/memory/

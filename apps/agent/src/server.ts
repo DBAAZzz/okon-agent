@@ -26,8 +26,11 @@ await fastify.register(import('./plugins/qdrant.js'));
 // Initialize session manager with prisma
 initSessionManager(fastify.prisma);
 
-// Initialize memory store with qdrant
-initMemory(fastify.qdrant);
+// Initialize file-based memory store
+const memoryStore = initMemory();
+memoryStore.cleanExpiredForAllBots().catch((err) => {
+  logger.warn('启动时清理过期记忆失败，继续启动服务', err);
+});
 
 // Initialize knowledge store with prisma + qdrant + embeddings
 const embeddings = createEmbeddings(fastify.qdrant);

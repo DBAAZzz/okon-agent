@@ -6,7 +6,11 @@ import { adaptStream } from './events/index.js'
 import { collectApprovalRequests } from './approval/index.js'
 import { createAgentWithCredentials } from './factory.js'
 import { sessionManager } from './session-manager.js'
-import { memoryStore } from '../capabilities/memory/index.js'
+import {
+  extractMemories,
+  fileMemoryStore,
+  type MemoryExtractorModelConfig,
+} from '../capabilities/memory/index.js'
 import { buildSystemPrompt } from './prompt/index.js'
 import type { KnowledgeStore } from '../capabilities/knowledge/knowledge-store.js'
 import {
@@ -25,6 +29,8 @@ export type AgentStreamResult = {
   userMessage?: string
   runId: string
   provider: string
+  botId?: number
+  memoryModel: MemoryExtractorModelConfig
 }
 
 export type RunAgentOptions = {
@@ -69,15 +75,49 @@ function getCompactThreshold(modelId: string): number {
  * 组成估算：
  * - BASE_INSTRUCTIONS / botPrompt: ~500 tokens
  * - RAG 知识库文档（MAX_CONTEXT_CHARS=4000）: ~1300 tokens
- * - memories（最多 3 条）: ~200 tokens
+ * - memories（Markdown 记忆片段）: ~500 tokens
  * - 工具定义（weather/research/planner 等 JSON schema）: ~1000 tokens
  * 合计约 3000 tokens，取整为保守值
  */
 const SYSTEM_PROMPT_BUDGET = 3000
 
+function getAssistantText(messages: ModelMessage[]): string {
+  return messages
+    .filter((m) => m.role === 'assistant')
+    .map((m) => {
+      if (typeof m.content === 'string') return m.content
+      if (!Array.isArray(m.content)) return ''
+      return m.content
+        .filter((p): p is { type: 'text'; text: string } => p.type === 'text')
+        .map((p) => p.text)
+        .join('')
+    })
+    .join('')
+    .trim()
+}
+
+async function extractAndPersistMemories(params: {
+  botId: number
+  sessionId: number
+  userMessage: string
+  assistantMessage: string
+  memoryModel: MemoryExtractorModelConfig
+}): Promise<void> {
+  const existingMemories = await fileMemoryStore.loadAll(params.botId)
+  const actions = await extractMemories({
+    model: params.memoryModel,
+    existingMemories,
+    userMessage: params.userMessage,
+    assistantMessage: params.assistantMessage,
+  })
+
+  if (actions.length === 0) return
+  await fileMemoryStore.applyActions(params.botId, actions, params.sessionId)
+}
+
 /**
  * 准备并启动 agent 流 — 共用的编排逻辑
- * 存用户消息 → 取历史 → 搜记忆 → 建 prompt → 创建 agent → 启动 stream
+ * 存用户消息 → 取历史 → 加载长期记忆 → 建 prompt → 创建 agent → 启动 stream
  */
 export async function runAgent(
   sessionId: number,
@@ -153,7 +193,16 @@ export async function runAgent(
     }
   }
 
-  const memories = userMessage ? await memoryStore.recent({ sessionId: String(sessionId) }, 3) : []
+  let memoryMarkdown = ''
+  if (options.bot.id) {
+    fileMemoryStore.maybeCleanExpired(options.bot.id).catch((err) => {
+      logger.warn('过期记忆清理失败，跳过本轮', {
+        botId: options.bot.id,
+        err,
+      })
+    })
+    memoryMarkdown = await fileMemoryStore.load(options.bot.id)
+  }
 
   // RAG: 从 Bot 绑定的知识库中检索相关文档，按字符预算截取
   const MAX_CONTEXT_CHARS = 4000
@@ -173,7 +222,7 @@ export async function runAgent(
   }
 
   const instructions = buildSystemPrompt({
-    memories: memories.map((m) => m.content),
+    memoryMarkdown,
     botPrompt: options.bot?.systemPrompt ?? undefined,
     knowledgeDocs,
   })
@@ -189,7 +238,20 @@ export async function runAgent(
   logger.info('启动 agent stream', { sessionId, model: modelId, runId, history })
   const result = await agent.stream({ messages: history })
 
-  return { result, modelId, userMessage, runId, provider: options.bot.provider }
+  return {
+    result,
+    modelId,
+    userMessage,
+    runId,
+    provider: options.bot.provider,
+    botId: options.bot.id,
+    memoryModel: {
+      provider: options.bot.provider,
+      model: options.bot.model,
+      apiKey: options.bot.apiKey ?? '',
+      baseURL: options.bot.baseURL ?? undefined,
+    },
+  }
 }
 
 /**
@@ -235,14 +297,20 @@ export async function finalizeStream(
     })
   }
 
-  if (agentStream.userMessage) {
-    memoryStore
-      .storeConversation(agentStream.userMessage, response.messages, {
-        sessionId: String(sessionId),
+  if (agentStream.userMessage && agentStream.botId) {
+    const assistantMessage = getAssistantText(response.messages as ModelMessage[])
+    if (assistantMessage) {
+      extractAndPersistMemories({
+        botId: agentStream.botId,
+        sessionId,
+        userMessage: agentStream.userMessage,
+        assistantMessage,
+        memoryModel: agentStream.memoryModel,
       })
       .catch((err) => {
-        logger.error('记忆存储失败', err)
+        logger.error('记忆提取失败', err)
       })
+    }
   }
 
   logger.info('stream 收尾完成', { sessionId })
