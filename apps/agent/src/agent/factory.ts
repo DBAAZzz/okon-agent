@@ -9,9 +9,23 @@ import {
   weatherTool,
   getOutdoorActivitiesTool,
   ipLookupTool,
+  buildSchedulerTools,
 } from '../tools/index.js'
+import { scheduler } from '../capabilities/scheduler/index.js'
 
-function buildAgent(model: LanguageModel, modelId: string, instructions: string) {
+function buildAgent(
+  model: LanguageModel,
+  modelId: string,
+  instructions: string,
+  botId?: number,
+  sessionId?: number,
+) {
+  const schedulerTools = buildSchedulerTools(
+    () => scheduler,
+    () => botId ?? 0,
+    () => sessionId,
+  )
+
   return new ToolLoopAgent({
     model,
     instructions,
@@ -19,6 +33,7 @@ function buildAgent(model: LanguageModel, modelId: string, instructions: string)
       weather: weatherTool,
       getOutdoorActivities: getOutdoorActivitiesTool,
       ipLookup: ipLookupTool,
+      ...schedulerTools,
       ...buildSubagentTools(modelId),
     },
     stopWhen: stepCountIs(5),
@@ -34,6 +49,8 @@ export function createAgentWithCredentials(
   modelId: string,
   instructions: string,
   credentials: { apiKey: string; baseURL?: string },
+  botId?: number,
+  sessionId?: number,
 ) {
   const { apiKey, baseURL } = credentials
   if (!apiKey.trim()) {
@@ -65,5 +82,5 @@ export function createAgentWithCredentials(
     }
   }
 
-  return buildAgent(model, modelId, instructions)
+  return buildAgent(model, modelId, instructions, botId, sessionId)
 }

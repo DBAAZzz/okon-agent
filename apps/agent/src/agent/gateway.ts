@@ -232,7 +232,7 @@ export async function runAgent(
   }
   if (options.bot.baseURL) credentials.baseURL = options.bot.baseURL
 
-  const agent = createAgentWithCredentials(options.bot.provider, modelId, instructions, credentials)
+  const agent = createAgentWithCredentials(options.bot.provider, modelId, instructions, credentials, options.bot.id, sessionId)
 
   const runId = randomUUID()
   logger.info('启动 agent stream', { sessionId, model: modelId, runId, history })

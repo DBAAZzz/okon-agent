@@ -41,6 +41,7 @@ export interface ChannelManager {
   startOne(configId: number, platform: string, config: Record<string, any>, botId: number): Promise<void>
   stopOne(configId: number): Promise<void>
   stopAll(): Promise<void>
+  sendMessage(configId: number, externalChatId: string, text: string): Promise<void>
 }
 
 export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
@@ -120,7 +121,11 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
       if (!session?.bot) {
         throw new Error(`Session ${sessionId} has no bot configured`)
       }
-      const agentStream = await runAgent(sessionId, msg.text, { historyLimit: 0, bot: session.bot, knowledgeStore })
+      const agentStream = await runAgent(sessionId, msg.text, {
+        historyLimit: 0,
+        bot: session.bot,
+        knowledgeStore,
+      })
       replyStream = await adapter.createReplyStream?.(msg.externalChatId)
 
       if (replyStream) {
@@ -218,11 +223,20 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
     return null
   }
 
+  async function sendMessage(configId: number, externalChatId: string, text: string): Promise<void> {
+    const entry = adapters.get(configId)
+    if (!entry) {
+      throw new Error(`channel configId=${configId} 未运行，无法发送消息`)
+    }
+    await entry.adapter.sendMessage(externalChatId, text)
+  }
+
   return {
     startAll,
     startOne,
     stopOne,
     stopAll,
+    sendMessage,
   }
 }
 
@@ -239,6 +253,9 @@ function createNotInitializedManager(): ChannelManager {
       throw error
     },
     async stopAll() {
+      throw error
+    },
+    async sendMessage() {
       throw error
     },
   }

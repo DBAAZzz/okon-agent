@@ -336,6 +336,10 @@ export function createFeishuAdapter(config: FeishuConfig): ChannelAdapter {
     }
   }
 
+  async function sendMessage(externalChatId: string, text: string): Promise<void> {
+    await createTextMessage(externalChatId, text)
+  }
+
   async function stop(): Promise<void> {
     wsClient.close()
     logger.info('飞书 WebSocket 连接已关闭')
@@ -346,6 +350,7 @@ export function createFeishuAdapter(config: FeishuConfig): ChannelAdapter {
     start,
     createReplyStream,
     sendReply,
+    sendMessage,
     stop,
   }
 }

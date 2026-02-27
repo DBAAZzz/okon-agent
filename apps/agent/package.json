@@ -29,6 +29,7 @@
     "@tavily/core": "^0.7.1",
     "@trpc/server": "^11.0.0",
     "ai": "^6.0.83",
+    "cron-parser": "^5.5.0",
     "dotenv": "^16.4.7",
     "fastify": "^5.2.0",
     "fastify-plugin": "^5.1.0",
