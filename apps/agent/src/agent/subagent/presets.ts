@@ -32,7 +32,7 @@ export const SUBAGENT_PRESETS = {
     }),
   },
   planner: {
-    description: '将复杂任务拆解为可执行计划',
+    description: '将复杂任务拆解为可执行计划。调用后你需要按返回的步骤列表逐步执行，每步完成后再进行下一步。',
     instructions: `你是规划子代理。
     - 将任务拆解为可执行步骤。
     - 每一步说明目标、输入、预期产出、依赖关系。

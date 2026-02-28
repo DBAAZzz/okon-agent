@@ -1,4 +1,4 @@
-import { generateText } from 'ai'
+import { generateText, Output } from 'ai'
 import type { LanguageModel } from 'ai'
 import { createOpenAI } from '@ai-sdk/openai'
 import { createDeepSeek } from '@ai-sdk/deepseek'
@@ -65,19 +65,6 @@ function buildModel(config: MemoryExtractorModelConfig): LanguageModel {
     : sdkProvider.chat(config.model as any)
 }
 
-function parseExtractResult(raw: string): MemoryAction[] {
-  // 容错策略：只要 JSON 提取或 schema 校验失败，直接返回 []，宁可漏记不乱记。
-  try {
-    const jsonMatch = raw.match(/\[[\s\S]*\]/)
-    if (!jsonMatch) return []
-    const parsed = JSON.parse(jsonMatch[0])
-    return MemoryActionArraySchema.parse(parsed) as MemoryAction[]
-  } catch {
-    logger.warn('记忆提取结果解析失败，跳过本轮')
-    return []
-  }
-}
-
 function buildPrompt(input: MemoryExtractInput): string {
   // 将“已有记忆 + 本轮问答”拼成单次提取上下文，交给模型做 create/update/delete 决策。
   return [
@@ -98,18 +85,29 @@ export async function extractMemories(input: MemoryExtractInput): Promise<Memory
 
   const model = buildModel(input.model)
   const prompt = buildPrompt(input)
-  const { text } = await generateText({
-    model,
-    system: EXTRACTOR_SYSTEM_PROMPT,
-    prompt,
-    maxOutputTokens: 1200,
-  })
 
-  const actions = parseExtractResult(text)
-  logger.info('记忆提取完成', {
-    actionCount: actions.length,
-    model: input.model.model,
-    provider: input.model.provider,
-  })
-  return actions
+  try {
+    const { output } = await generateText({
+      model,
+      system: EXTRACTOR_SYSTEM_PROMPT,
+      prompt,
+      output: Output.object({
+        schema: z.object({
+          actions: MemoryActionArraySchema,
+        }),
+      }),
+      maxOutputTokens: 1200,
+    })
+
+    const actions = output.actions as MemoryAction[]
+    logger.info('记忆提取完成', {
+      actionCount: actions.length,
+      model: input.model.model,
+      provider: input.model.provider,
+    })
+    return actions
+  } catch (error) {
+    logger.warn('记忆提取失败，跳过本轮', { error })
+    return []
+  }
 }

@@ -234,6 +234,15 @@ export async function runAgent(
 
   const agent = createAgentWithCredentials(options.bot.provider, modelId, instructions, credentials, options.bot.id, sessionId)
 
+  // 给最后一条用户消息附加当前时间（仅发给 LLM，不入库）
+  for (let i = history.length - 1; i >= 0; i--) {
+    const msg = history[i]
+    if (msg.role === 'user' && typeof msg.content === 'string') {
+      history[i] = { ...msg, content: `${msg.content}\n\n[当前时间: ${new Date().toLocaleString('zh-CN', { timeZone: 'Asia/Shanghai' })}]` }
+      break
+    }
+  }
+
   const runId = randomUUID()
   logger.info('启动 agent stream', { sessionId, model: modelId, runId, history })
   const result = await agent.stream({ messages: history })

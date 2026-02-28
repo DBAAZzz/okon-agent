@@ -29,7 +29,13 @@ const scheduleSchema = z.discriminatedUnion('type', [
 const actionSchema = z.discriminatedUnion('type', [
   z.object({
     type: z.literal('agent-turn'),
-    prompt: z.string().describe('agent 执行的 prompt'),
+    prompt: z.string().describe(
+      '触发时 agent 要执行的指令（不是用户原话）。' +
+      '写成明确的执行命令，例如：' +
+      '提醒类 → "直接告诉用户：该吃饭了！"；' +
+      '查询类 → "查询明天北京天气，并给出穿衣建议"；' +
+      '报告类 → "总结今日待办完成情况并汇报给用户"',
+    ),
     sessionId: z.number().optional().describe('复用的会话 ID（留空则新建）'),
   }),
   z.object({
@@ -53,7 +59,9 @@ export function buildSchedulerTools(
     description:
       '创建定时任务或提醒。支持 cron 周期任务、固定间隔任务、一次性定时任务。' +
       '在频道（如飞书）对话中创建 agent-turn 任务时，执行结果会自动回复到当前会话，无需任何额外配置。' +
-      '对于"X分钟/小时后"等相对时间，请使用 delay 类型而非 at 类型。',
+      '对于"X分钟/小时后"等相对时间，请使用 delay 类型而非 at 类型。' +
+      '重要：agent-turn 的 prompt 是触发时 agent 收到的指令，不是用户原话的复述。' +
+      '写成可直接执行的命令，让 agent 到时间就能产出最终回复。',
     inputSchema: z.object({
       name: z.string().describe('任务名称'),
       schedule: scheduleSchema,

@@ -6,10 +6,11 @@ import { modelRegistry } from './models/index.js'
 import { resolveOpenAIAPIMode } from './provider-routing.js'
 import { buildSubagentTools } from './subagent/index.js'
 import {
-  weatherTool,
-  getOutdoorActivitiesTool,
-  ipLookupTool,
   buildSchedulerTools,
+  bashTool,
+  fileReadTool,
+  fileWriteTool,
+  fileEditTool,
 } from '../tools/index.js'
 import { scheduler } from '../capabilities/scheduler/index.js'
 
@@ -30,13 +31,16 @@ function buildAgent(
     model,
     instructions,
     tools: {
-      weather: weatherTool,
-      getOutdoorActivities: getOutdoorActivitiesTool,
-      ipLookup: ipLookupTool,
+      // Basic capabilities
+      bash: bashTool,
+      read: fileReadTool,
+      write: fileWriteTool,
+      edit: fileEditTool,
+      // Other tools
       ...schedulerTools,
       ...buildSubagentTools(modelId),
     },
-    stopWhen: stepCountIs(5),
+    stopWhen: stepCountIs(10),
   })
 }
 
