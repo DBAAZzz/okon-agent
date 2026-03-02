@@ -105,14 +105,14 @@ export function useSSEStream(sessionId: number) {
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setPendingApprovals([]);
 
-    const url = `http://localhost:3001/api/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(text)}`;
+    const url = `/api/chat/stream?sessionId=${encodeURIComponent(sessionId)}&message=${encodeURIComponent(text)}`;
     startStream(url);
   }, [sessionId, startStream]);
 
   const continueAfterApproval = useCallback(() => {
     setPendingApprovals([]);
 
-    const url = `http://localhost:3001/api/chat/continue?sessionId=${encodeURIComponent(sessionId)}`;
+    const url = `/api/chat/continue?sessionId=${encodeURIComponent(sessionId)}`;
     startStream(url);
   }, [sessionId, startStream]);
 

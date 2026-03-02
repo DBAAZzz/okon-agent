@@ -5,21 +5,23 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { ChatInterface } from '@/components/ChatInterface';
 import { SessionSidebar } from '@/components/SessionSidebar';
 import { useBots } from '@/hooks/useBots';
+import type { BotRecord } from '@/types/api';
 
 type Props = {
-  botId: string; // URL param is always string
+  botId: number;
+  initialBot: BotRecord;
 };
 
-export function BotSessionWorkspace({ botId: botIdStr }: Props) {
-  const botId = Number(botIdStr);
-  const { bots, isLoading } = useBots();
+export function BotSessionWorkspace({ botId, initialBot }: Props) {
+  const { bots, isLoading } = useBots({ initialBots: [initialBot] });
   const [sessionId, setSessionId] = useState<number | null>(null);
 
   useEffect(() => {
     setSessionId(null);
   }, [botId]);
 
-  const bot = useMemo(() => bots.find((item) => item.id === botId) ?? null, [bots, botId]);
+  const liveBot = useMemo(() => bots.find((item) => item.id === botId) ?? null, [bots, botId]);
+  const bot = liveBot ?? initialBot;
 
   const handleSelectSession = useCallback((id: number) => {
     setSessionId(id);
@@ -29,7 +31,7 @@ export function BotSessionWorkspace({ botId: botIdStr }: Props) {
     setSessionId(id);
   }, []);
 
-  if (!isLoading && !bot) {
+  if (!isLoading && !liveBot) {
     return (
       <main className="min-h-screen p-4 md:p-8">
         <div className="mx-auto max-w-3xl rounded-3xl border border-[var(--line-soft)] bg-[var(--surface-1)] p-8 text-center shadow-[0_28px_80px_-40px_rgba(24,38,59,0.55)]">
@@ -72,7 +74,7 @@ export function BotSessionWorkspace({ botId: botIdStr }: Props) {
                   切换 Bot
                 </Link>
                 <Link
-                  href={`/bots/${botIdStr}/edit`}
+                  href={`/bots/${botId}/edit`}
                   className="rounded-lg border border-[var(--line-soft)] px-3 py-1.5 text-xs text-[var(--ink-2)] hover:bg-white/70 transition"
                 >
                   编辑 Bot

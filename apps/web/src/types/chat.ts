@@ -1,3 +1,5 @@
+import type { BotRecord, SessionRecord } from './api';
+
 export type ToolDetail = {
   toolCallId: string;
   toolName: string;
@@ -13,28 +15,13 @@ export type ToolDetail = {
 };
 
 export type ChatMessage = {
+  id: string;
   role: "user" | "assistant";
   content: string;
   reasoning?: string;
   tools?: ToolDetail[];
 };
 
-export type Bot = {
-  id: number;
-  name: string;
-  provider: string;
-  model: string;
-  baseURL?: string | null;
-  apiKey?: string | null;
-  systemPrompt?: string | null;
-  createdAt?: string;
-  updatedAt?: string;
-};
+export type Bot = BotRecord;
 
-export type Session = {
-  id: number;
-  title: string | null;
-  bot: { id: number; name: string } | null;
-  createdAt: string;
-  updatedAt: string;
-};
+export type Session = SessionRecord;

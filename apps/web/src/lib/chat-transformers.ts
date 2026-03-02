@@ -145,15 +145,22 @@ export function mergeToolDetails(
 export function toDisplayMessages(messages: UIMessage[]): ChatMessage[] {
   const ui: ChatMessage[] = [];
 
-  for (const message of messages) {
+  for (let i = 0; i < messages.length; i++) {
+    const message = messages[i];
     if (message.role !== "user" && message.role !== "assistant") {
       continue;
     }
+
+    const messageId =
+      typeof message.id === "string" && message.id.length > 0
+        ? message.id
+        : `display-${message.role}-${i}`;
 
     if (message.role === "user") {
       const { text } = extractMessageParts(message.parts as any[]);
       if (!text) continue;
       ui.push({
+        id: messageId,
         role: "user",
         content: text,
       });
@@ -185,6 +192,7 @@ export function toDisplayMessages(messages: UIMessage[]): ChatMessage[] {
     }
 
     ui.push({
+      id: messageId,
       role: "assistant",
       content: text,
       reasoning: reasoning || undefined,

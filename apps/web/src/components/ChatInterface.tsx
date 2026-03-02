@@ -10,6 +10,7 @@ import { MessageList } from './MessageList';
 import { MessageInput } from './MessageInput';
 import { ApprovalRequest } from './ApprovalRequest';
 import { useChatHistory } from '@/hooks/useChatHistory';
+import { useRafThrottledValue } from '@/hooks/useRafThrottledValue';
 import {
   extractPendingApprovals,
   toDisplayMessages,
@@ -17,33 +18,15 @@ import {
 } from '@/lib/chat-transformers';
 import { trpc } from '@/lib/trpc';
 import type { ChatMessage } from '@/types/chat';
+import type { CompactionSummaryRecord, TokenUsageSummary } from '@/types/api';
 
 type Props = {
   sessionId: number;
 };
 
-type TokenUsageSummary = {
-  totalInputTokens: number;
-  totalOutputTokens: number;
-  totalTokens: number;
-  requestCount: number;
-};
-
-type CompactionSummary = {
-  id: number;
-  sessionId: number;
-  summary: string;
-  messageIdFrom: number;
-  messageIdTo: number;
-  originalTokens: number;
-  summaryTokens: number;
-  model: string;
-  createdAt: string;
-};
-
 export function ChatInterface({ sessionId }: Props) {
   const [tokenUsage, setTokenUsage] = useState<TokenUsageSummary | null>(null);
-  const [compactionSummary, setCompactionSummary] = useState<CompactionSummary | null>(null);
+  const [compactionSummary, setCompactionSummary] = useState<CompactionSummaryRecord | null>(null);
   const [summaryOpen, setSummaryOpen] = useState(false);
   const [showOriginal, setShowOriginal] = useState(false);
   const [originalMessages, setOriginalMessages] = useState<ChatMessage[] | null>(null);
@@ -117,7 +100,7 @@ export function ChatInterface({ sessionId }: Props) {
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: 'http://localhost:3001/api/chat',
+        api: '/api/chat',
         body: { sessionId },
       }),
     [sessionId]
@@ -135,8 +118,12 @@ export function ChatInterface({ sessionId }: Props) {
 
   useChatHistory(sessionId, setMessages);
 
+  const throttledMessages = useRafThrottledValue(messages, 40);
   const pendingApprovals = useMemo(() => extractPendingApprovals(messages), [messages]);
-  const displayMessages = useMemo(() => toDisplayMessages(messages), [messages]);
+  const displayMessages = useMemo(
+    () => toDisplayMessages(throttledMessages),
+    [throttledMessages]
+  );
   const isStreaming = status === 'submitted' || status === 'streaming';
 
   const handleToggleOriginal = useCallback(async () => {
@@ -152,7 +139,7 @@ export function ChatInterface({ sessionId }: Props) {
           messageIdFrom: compactionSummary.messageIdFrom,
           messageIdTo: compactionSummary.messageIdTo,
         });
-        const history = rawMessages.map((m: any) => m.content);
+        const history = rawMessages.map((m) => m.content);
         const uiMessages = toHistoryUIMessages(history);
         const display = toDisplayMessages(uiMessages);
         setOriginalMessages(display);
@@ -220,9 +207,9 @@ export function ChatInterface({ sessionId }: Props) {
           {originalLoading ? (
             <div className="text-xs text-[var(--ink-2)]">加载中...</div>
           ) : originalMessages && originalMessages.length > 0 ? (
-            originalMessages.map((msg, index) => (
+            originalMessages.map((msg) => (
               <div
-                key={index}
+                key={msg.id}
                 className="rounded-lg border border-[var(--line-soft)] bg-white/80 px-3 py-2"
               >
                 <div className="text-[10px] uppercase tracking-wide text-[var(--ink-2)]">

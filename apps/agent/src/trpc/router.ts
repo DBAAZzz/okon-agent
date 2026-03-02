@@ -1,4 +1,5 @@
 import { initTRPC } from '@trpc/server';
+import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 import { z } from 'zod';
 import type { Context } from './context.js';
 import { sessionManager } from '../agent/session-manager.js';
@@ -12,13 +13,26 @@ export const publicProcedure = t.procedure;
 export const appRouter = router({
   session: router({
     // 获取会话列表（仅 web 来源）
-    list: publicProcedure.query(async ({ ctx }) => {
-      return ctx.req.server.prisma.session.findMany({
-        where: { source: 'web' },
-        orderBy: { updatedAt: 'desc' },
-        include: { bot: { select: { id: true, name: true } } },
-      });
-    }),
+    list: publicProcedure
+      .input(
+        z
+          .object({
+            botId: z.number().int().positive().optional(),
+          })
+          .optional(),
+      )
+      .query(async ({ ctx, input }) => {
+        const where = {
+          source: 'web',
+          ...(input?.botId ? { botId: input.botId } : {}),
+        };
+
+        return ctx.req.server.prisma.session.findMany({
+          where,
+          orderBy: { updatedAt: 'desc' },
+          include: { bot: { select: { id: true, name: true } } },
+        });
+      }),
 
     // 创建会话
     create: publicProcedure
@@ -221,6 +235,15 @@ export const appRouter = router({
       return ctx.req.server.prisma.bot.findMany({ orderBy: { createdAt: 'desc' } });
     }),
 
+    // 获取单个 Bot
+    get: publicProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        return ctx.req.server.prisma.bot.findUnique({
+          where: { id: input.id },
+        });
+      }),
+
     // 创建 Bot
     create: publicProcedure
       .input(z.object({
@@ -410,3 +433,5 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
+export type AppRouterInputs = inferRouterInputs<AppRouter>;
+export type AppRouterOutputs = inferRouterOutputs<AppRouter>;

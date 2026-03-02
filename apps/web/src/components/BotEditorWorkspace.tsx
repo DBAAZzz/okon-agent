@@ -20,9 +20,11 @@ import {
 } from '@okon/ui';
 import { trpc } from '@/lib/trpc';
 import { useBots } from '@/hooks/useBots';
+import type { BotRecord, ChannelRecord, KnowledgeBaseRecord } from '@/types/api';
 
 type Props = {
   botId: number;
+  initialBot: BotRecord;
 };
 
 type BasicFormState = {
@@ -39,39 +41,6 @@ type FeishuFormState = {
   appId: string;
   appSecret: string;
   enabled: boolean;
-};
-
-type ChannelConfigRecord = {
-  id: number;
-  platform: string;
-  name: string;
-  enabled: boolean;
-  config: unknown;
-  createdAt: string;
-  updatedAt: string;
-};
-
-type ChannelApi = {
-  list: { query: (input?: { botId?: number }) => Promise<unknown> };
-  upsert: { mutate: (input: unknown) => Promise<unknown> };
-  delete: { mutate: (input: { id: number }) => Promise<unknown> };
-};
-
-type KnowledgeBaseRecord = {
-  id: number;
-  name: string;
-  description: string | null;
-  _count?: {
-    documents: number;
-    bots: number;
-  };
-};
-
-type KnowledgeBaseApi = {
-  list: { query: () => Promise<unknown> };
-  getBotKnowledgeBases: { query: (input: { botId: number }) => Promise<unknown> };
-  bindBot: { mutate: (input: { botId: number; knowledgeBaseId: number }) => Promise<unknown> };
-  unbindBot: { mutate: (input: { botId: number; knowledgeBaseId: number }) => Promise<unknown> };
 };
 
 const DEFAULT_BASIC_FORM: BasicFormState = {
@@ -106,14 +75,12 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
-export function BotEditorWorkspace({ botId }: Props) {
-  const channelApi = useMemo(() => trpc.channel as unknown as ChannelApi, []);
-  const knowledgeBaseApi = useMemo(() => trpc.knowledgeBase as unknown as KnowledgeBaseApi, []);
-  const { bots, isLoading } = useBots();
+export function BotEditorWorkspace({ botId, initialBot }: Props) {
+  const { bots, isLoading } = useBots({ initialBots: [initialBot] });
 
   const [basicForm, setBasicForm] = useState<BasicFormState>(DEFAULT_BASIC_FORM);
   const [feishuForm, setFeishuForm] = useState<FeishuFormState>(DEFAULT_FEISHU_FORM);
-  const [channelList, setChannelList] = useState<ChannelConfigRecord[]>([]);
+  const [channelList, setChannelList] = useState<ChannelRecord[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseRecord[]>([]);
   const [boundKnowledgeBaseIds, setBoundKnowledgeBaseIds] = useState<number[]>([]);
 
@@ -124,7 +91,8 @@ export function BotEditorWorkspace({ botId }: Props) {
   const [knowledgeMutatingId, setKnowledgeMutatingId] = useState<number | null>(null);
   const [status, setStatus] = useState('');
 
-  const bot = useMemo(() => bots.find((item) => item.id === botId) ?? null, [bots, botId]);
+  const liveBot = useMemo(() => bots.find((item) => item.id === botId) ?? null, [bots, botId]);
+  const bot = liveBot ?? initialBot;
   const feishuConfig = useMemo(
     () => channelList.find((item) => item.platform === 'feishu') ?? null,
     [channelList]
@@ -133,33 +101,31 @@ export function BotEditorWorkspace({ botId }: Props) {
   const loadChannelConfigs = useCallback(async () => {
     setFeishuLoading(true);
     try {
-      const rows = await channelApi.list.query({ botId });
-      setChannelList(rows as ChannelConfigRecord[]);
+      const rows = await trpc.channel.list.query({ botId });
+      setChannelList(rows);
     } catch (error) {
       setStatus(`加载飞书配置失败: ${errorMessage(error)}`);
     } finally {
       setFeishuLoading(false);
     }
-  }, [channelApi, botId]);
+  }, [botId]);
 
   const loadKnowledgeBases = useCallback(async () => {
     setKnowledgeLoading(true);
     try {
       const [allRows, botRows] = await Promise.all([
-        knowledgeBaseApi.list.query(),
-        knowledgeBaseApi.getBotKnowledgeBases.query({ botId }),
+        trpc.knowledgeBase.list.query(),
+        trpc.knowledgeBase.getBotKnowledgeBases.query({ botId }),
       ]);
-      const allKnowledgeBases = allRows as KnowledgeBaseRecord[];
-      const botKnowledgeBases = botRows as KnowledgeBaseRecord[];
 
-      setKnowledgeBases(allKnowledgeBases);
-      setBoundKnowledgeBaseIds(botKnowledgeBases.map((item) => item.id));
+      setKnowledgeBases(allRows);
+      setBoundKnowledgeBaseIds(botRows.map((item) => item.id));
     } catch (error) {
       setStatus(`加载知识库失败: ${errorMessage(error)}`);
     } finally {
       setKnowledgeLoading(false);
     }
-  }, [knowledgeBaseApi, botId]);
+  }, [botId]);
 
   useEffect(() => {
     if (!bot) {
@@ -212,7 +178,7 @@ export function BotEditorWorkspace({ botId }: Props) {
     setFeishuSaving(true);
     setStatus('');
     try {
-      await channelApi.upsert.mutate({
+      await trpc.channel.upsert.mutate({
         botId,
         platform: 'feishu',
         name,
@@ -239,7 +205,7 @@ export function BotEditorWorkspace({ botId }: Props) {
     setFeishuDeleting(true);
     setStatus('');
     try {
-      await channelApi.delete.mutate({ id: feishuConfig.id });
+      await trpc.channel.delete.mutate({ id: feishuConfig.id });
       setFeishuForm(DEFAULT_FEISHU_FORM);
       setStatus('飞书绑定已删除。');
       await loadChannelConfigs();
@@ -256,10 +222,10 @@ export function BotEditorWorkspace({ botId }: Props) {
     setStatus('');
     try {
       if (isBound) {
-        await knowledgeBaseApi.unbindBot.mutate({ botId, knowledgeBaseId });
+        await trpc.knowledgeBase.unbindBot.mutate({ botId, knowledgeBaseId });
         setStatus('已解绑知识库。');
       } else {
-        await knowledgeBaseApi.bindBot.mutate({ botId, knowledgeBaseId });
+        await trpc.knowledgeBase.bindBot.mutate({ botId, knowledgeBaseId });
         setStatus('已绑定知识库。');
       }
       await loadKnowledgeBases();
@@ -270,7 +236,7 @@ export function BotEditorWorkspace({ botId }: Props) {
     }
   };
 
-  if (!isLoading && !bot) {
+  if (!isLoading && !liveBot) {
     return (
       <main className="min-h-screen p-4 md:p-8">
         <div className="mx-auto max-w-3xl rounded-3xl border border-[var(--line-soft)] bg-[var(--surface-1)] p-8 text-center shadow-[0_28px_80px_-40px_rgba(24,38,59,0.55)]">
