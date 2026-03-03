@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useSessions } from '@/hooks/useSessions';
+import { useSessions } from "@/hooks/useSessions";
 
 type Props = {
   botId: number | null;
@@ -13,7 +13,7 @@ export function SessionSidebar({ botId, currentSessionId, onSelectSession, onNew
   const { sessions, createSession, deleteSession } = useSessions(
     botId,
     currentSessionId,
-    onNewSession
+    onNewSession,
   );
 
   return (
@@ -35,24 +35,20 @@ export function SessionSidebar({ botId, currentSessionId, onSelectSession, onNew
       </div>
       <div className="flex-1 overflow-y-auto px-2 pb-3">
         {!botId ? (
-          <div className="p-4 text-center text-sm text-gray-400">
-            Select a bot to see sessions.
-          </div>
+          <div className="p-4 text-center text-sm text-gray-400">Select a bot to see sessions.</div>
         ) : (
-          sessions.map(session => (
+          sessions.map((session) => (
             <div
               key={session.id}
               onClick={() => onSelectSession(session.id)}
               className={`group mb-1.5 flex items-center justify-between rounded-xl px-3 py-2.5 cursor-pointer text-sm transition-all ${
                 currentSessionId === session.id
-                  ? 'bg-[#f2c07826] text-[#fff2d5] shadow-[inset_0_0_0_1px_rgba(242,192,120,0.34)]'
-                  : 'text-[#d8e3ef] hover:bg-[#f2c07814] hover:text-[#fff2d5]'
+                  ? "bg-[#f2c07826] text-[#fff2d5] shadow-[inset_0_0_0_1px_rgba(242,192,120,0.34)]"
+                  : "text-[#d8e3ef] hover:bg-[#f2c07814] hover:text-[#fff2d5]"
               }`}
             >
               <div className="min-w-0">
-                <div className="truncate pr-2">
-                  {session.title || `Session #${session.id}`}
-                </div>
+                <div className="truncate pr-2">{session.title || `Session #${session.id}`}</div>
               </div>
               <button
                 onClick={(e) => deleteSession(e, session.id)}

@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useBots } from '@/hooks/useBots';
-import { Bot } from '@/types/chat';
+import Link from "next/link";
+import { useBots } from "@/hooks/useBots";
+import { Bot } from "@/types/chat";
 
 type Props = {
   currentBotId: number | null;
@@ -25,8 +25,8 @@ export function BotSidebar({ currentBotId, onSelectBot }: Props) {
             onClick={() => onSelectBot(bot.id)}
             className={`group mb-1.5 flex items-center justify-between rounded-xl px-3 py-2.5 cursor-pointer text-sm transition-all ${
               currentBotId === bot.id
-                ? 'bg-[#f2c07826] text-[#fff2d5] shadow-[inset_0_0_0_1px_rgba(242,192,120,0.34)]'
-                : 'text-[#d8e3ef] hover:bg-[#f2c07814] hover:text-[#fff2d5]'
+                ? "bg-[#f2c07826] text-[#fff2d5] shadow-[inset_0_0_0_1px_rgba(242,192,120,0.34)]"
+                : "text-[#d8e3ef] hover:bg-[#f2c07814] hover:text-[#fff2d5]"
             }`}
           >
             <div className="min-w-0">

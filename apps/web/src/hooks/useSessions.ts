@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback } from 'react';
-import { trpc } from '@/lib/trpc';
-import type { Session } from '@/types/chat';
+import { useState, useEffect, useCallback } from "react";
+import { trpc } from "@/lib/trpc";
+import type { Session } from "@/types/chat";
 
 export function useSessions(
   botId: number | null,
@@ -8,7 +8,7 @@ export function useSessions(
   onNewSession: (sessionId: number) => void,
 ) {
   const [sessions, setSessions] = useState<Session[]>([]);
-  
+
   const loadSessions = useCallback(async () => {
     if (!botId) {
       setSessions([]);
@@ -31,10 +31,10 @@ export function useSessions(
     if (!botId) return;
     try {
       const session = await trpc.session.create.mutate({ botId });
-      setSessions(prev => [session, ...prev]);
+      setSessions((prev) => [session, ...prev]);
       onNewSession(session.id);
     } catch (err) {
-      console.error('Failed to create session:', err);
+      console.error("Failed to create session:", err);
     }
   };
 
@@ -42,9 +42,9 @@ export function useSessions(
     e.stopPropagation();
     try {
       await trpc.session.delete.mutate({ sessionId });
-      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
     } catch (err) {
-      console.error('Failed to delete session:', err);
+      console.error("Failed to delete session:", err);
     }
   };
 

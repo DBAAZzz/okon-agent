@@ -1,33 +1,27 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import { trpc } from '@/lib/trpc';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@okon/ui';
+import { useState } from "react";
+import { trpc } from "@/lib/trpc";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@okon/ui";
 
 export default function EmbeddingsPage() {
-  const [content, setContent] = useState('');
-  const [query, setQuery] = useState('');
-  const [mode, setMode] = useState<'dense' | 'sparse' | 'hybrid'>('hybrid');
+  const [content, setContent] = useState("");
+  const [query, setQuery] = useState("");
+  const [mode, setMode] = useState<"dense" | "sparse" | "hybrid">("hybrid");
   const [results, setResults] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState('');
+  const [message, setMessage] = useState("");
 
   const handleAdd = async () => {
     if (!content.trim()) return;
 
     setLoading(true);
-    setMessage('');
+    setMessage("");
 
     try {
       const data = await trpc.embeddings.add.mutate({ content });
       setMessage(`✓ Added: ${data.id}`);
-      setContent('');
+      setContent("");
     } catch (error) {
       setMessage(`✗ Error: ${error}`);
     } finally {
@@ -39,7 +33,7 @@ export default function EmbeddingsPage() {
     if (!query.trim()) return;
 
     setLoading(true);
-    setMessage('');
+    setMessage("");
 
     try {
       const data = await trpc.embeddings.search.query({ query, topK: 5, mode });
@@ -71,7 +65,7 @@ export default function EmbeddingsPage() {
           disabled={loading || !content.trim()}
           className="px-6 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:opacity-50"
         >
-          {loading ? 'Adding...' : 'Add'}
+          {loading ? "Adding..." : "Add"}
         </button>
       </section>
 
@@ -82,7 +76,7 @@ export default function EmbeddingsPage() {
           <label className="block text-sm font-medium mb-2">Mode</label>
           <Select
             value={mode}
-            onValueChange={(value) => setMode(value as 'dense' | 'sparse' | 'hybrid')}
+            onValueChange={(value) => setMode(value as "dense" | "sparse" | "hybrid")}
             disabled={loading}
           >
             <SelectTrigger className="w-full">
@@ -102,23 +96,19 @@ export default function EmbeddingsPage() {
           placeholder="Enter search query..."
           className="w-full p-3 border rounded mb-4"
           disabled={loading}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
         />
         <button
           onClick={handleSearch}
           disabled={loading || !query.trim()}
           className="px-6 py-2 bg-green-500 text-white rounded hover:bg-green-600 disabled:opacity-50"
         >
-          {loading ? 'Searching...' : 'Search'}
+          {loading ? "Searching..." : "Search"}
         </button>
       </section>
 
       {/* Message */}
-      {message && (
-        <div className="mb-4 p-3 border rounded bg-gray-50">
-          {message}
-        </div>
-      )}
+      {message && <div className="mb-4 p-3 border rounded bg-gray-50">{message}</div>}
 
       {/* Results */}
       {results.length > 0 && (

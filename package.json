@@ -9,10 +9,19 @@
     "dev:agent": "pnpm --filter @okon/agent dev",
     "dev:web": "pnpm --filter @okon/web dev",
     "build": "pnpm --filter @okon/shared --filter @okon/ui build && pnpm --filter @okon/agent... --filter @okon/web... build",
-    "typecheck": "pnpm --recursive --stream typecheck"
+    "fmt": "pnpm --filter @okon/web fmt",
+    "typecheck": "pnpm --recursive --stream typecheck",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "apps/web/**/*.{js,jsx,ts,tsx,mjs,cjs,json,css,scss,md,mdx,html,yaml,yml}": [
+      "./apps/web/node_modules/.bin/oxfmt"
+    ]
   },
   "devDependencies": {
     "@types/node": "^25.2.3",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3"
   }

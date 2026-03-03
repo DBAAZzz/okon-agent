@@ -1,26 +1,26 @@
-'use client';
+"use client";
 
-import { useState, KeyboardEvent } from 'react';
-import { Button, Textarea } from '@okon/ui';
+import { useState, KeyboardEvent } from "react";
+import { Button, Textarea } from "@okon/ui";
 
 export function MessageInput({
   onSend,
-  disabled
+  disabled,
 }: {
   onSend: (message: string) => void;
   disabled?: boolean;
 }) {
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
 
   const handleSend = () => {
     if (input.trim() && !disabled) {
       onSend(input);
-      setInput('');
+      setInput("");
     }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSend();
     }
@@ -34,7 +34,9 @@ export function MessageInput({
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
           disabled={disabled}
-          placeholder={disabled ? '请先处理审批请求...' : '输入消息... (Enter 发送, Shift+Enter 换行)'}
+          placeholder={
+            disabled ? "请先处理审批请求..." : "输入消息... (Enter 发送, Shift+Enter 换行)"
+          }
           className="flex-1 min-h-0 resize-none rounded-xl border-none bg-transparent px-3 py-2 text-[15px] text-[var(--ink-1)] placeholder:text-[var(--ink-2)]/70 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 disabled:cursor-not-allowed"
           rows={2}
         />

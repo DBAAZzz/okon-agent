@@ -24,19 +24,13 @@ export function decodeToolOutput(output: unknown): {
   output?: unknown;
   errorText?: string;
 } {
-  if (
-    output &&
-    typeof output === "object" &&
-    "type" in (output as Record<string, unknown>)
-  ) {
+  if (output && typeof output === "object" && "type" in (output as Record<string, unknown>)) {
     const structured = output as Record<string, unknown>;
     if (structured.type === "error-text") {
       return {
         state: "output-error",
         errorText:
-          typeof structured.value === "string"
-            ? structured.value
-            : "Tool execution failed",
+          typeof structured.value === "string" ? structured.value : "Tool execution failed",
       };
     }
 
@@ -76,19 +70,12 @@ export function extractMessageParts(parts: any[]): {
           ? part.toolCallId
           : `${getToolName(part)}-${tools.length}`;
       const approval =
-        part.approval &&
-        typeof part.approval === "object" &&
-        typeof part.approval.id === "string"
+        part.approval && typeof part.approval === "object" && typeof part.approval.id === "string"
           ? {
               id: part.approval.id,
               approved:
-                typeof part.approval.approved === "boolean"
-                  ? part.approval.approved
-                  : undefined,
-              reason:
-                typeof part.approval.reason === "string"
-                  ? part.approval.reason
-                  : undefined,
+                typeof part.approval.approved === "boolean" ? part.approval.approved : undefined,
+              reason: typeof part.approval.reason === "string" ? part.approval.reason : undefined,
             }
           : undefined;
       tools.push({
@@ -97,8 +84,7 @@ export function extractMessageParts(parts: any[]): {
         state: typeof part.state === "string" ? part.state : "input-available",
         input: part.input,
         output: part.output,
-        errorText:
-          typeof part.errorText === "string" ? part.errorText : undefined,
+        errorText: typeof part.errorText === "string" ? part.errorText : undefined,
         approval,
       });
     }
@@ -137,9 +123,7 @@ export function mergeToolDetails(
     }
   }
 
-  return order
-    .map((id) => map.get(id))
-    .filter((detail): detail is ToolDetail => !!detail);
+  return order.map((id) => map.get(id)).filter((detail): detail is ToolDetail => !!detail);
 }
 
 export function toDisplayMessages(messages: UIMessage[]): ChatMessage[] {
@@ -167,9 +151,7 @@ export function toDisplayMessages(messages: UIMessage[]): ChatMessage[] {
       continue;
     }
 
-    const { text, reasoning, tools } = extractMessageParts(
-      message.parts as any[],
-    );
+    const { text, reasoning, tools } = extractMessageParts(message.parts as any[]);
     const last = ui.at(-1);
 
     if (!text && !reasoning && tools.length === 0) {
@@ -181,9 +163,7 @@ export function toDisplayMessages(messages: UIMessage[]): ChatMessage[] {
         last.content = last.content ? `${last.content}\n\n${text}` : text;
       }
       if (reasoning) {
-        last.reasoning = last.reasoning
-          ? `${last.reasoning}\n\n${reasoning}`
-          : reasoning;
+        last.reasoning = last.reasoning ? `${last.reasoning}\n\n${reasoning}` : reasoning;
       }
       if (tools.length > 0) {
         last.tools = mergeToolDetails(last.tools, tools);
@@ -246,10 +226,7 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
       return toolPart;
     }
 
-    if (
-      options.toolName &&
-      (toolPart.toolName == null || toolPart.toolName === "unknown")
-    ) {
+    if (options.toolName && (toolPart.toolName == null || toolPart.toolName === "unknown")) {
       toolPart.toolName = options.toolName;
     }
     if (options.input !== undefined) {
@@ -268,10 +245,7 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
           ? msg.content
           : Array.isArray(msg.content)
             ? msg.content
-                .filter(
-                  (part: any) =>
-                    part.type === "text" && typeof part.text === "string",
-                )
+                .filter((part: any) => part.type === "text" && typeof part.text === "string")
                 .map((part: any) => part.text)
                 .join("")
             : "";
@@ -295,10 +269,7 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
             ? msg.content
             : Array.isArray(msg.content)
               ? msg.content
-                  .filter(
-                    (part: any) =>
-                      part.type === "text" && typeof part.text === "string",
-                  )
+                  .filter((part: any) => part.type === "text" && typeof part.text === "string")
                   .map((part: any) => part.text)
                   .join("")
               : "";
@@ -337,8 +308,7 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
         if (part.type === "tool-call" && typeof part.toolCallId === "string") {
           const toolPart = {
             type: "dynamic-tool",
-            toolName:
-              typeof part.toolName === "string" ? part.toolName : "unknown",
+            toolName: typeof part.toolName === "string" ? part.toolName : "unknown",
             toolCallId: part.toolCallId,
             state: "input-available",
             input: part.input ?? part.args ?? {},
@@ -363,15 +333,11 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
           continue;
         }
 
-        if (
-          part.type === "tool-result" &&
-          typeof part.toolCallId === "string"
-        ) {
+        if (part.type === "tool-result" && typeof part.toolCallId === "string") {
           const toolPart = upsertToolPart({
             index: i,
             toolCallId: part.toolCallId,
-            toolName:
-              typeof part.toolName === "string" ? part.toolName : undefined,
+            toolName: typeof part.toolName === "string" ? part.toolName : undefined,
           });
           const parsedOutput = decodeToolOutput(part.output ?? part.result);
           toolPart.state = parsedOutput.state;
@@ -395,17 +361,13 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
       for (const part of msg.content) {
         if (!part || typeof part !== "object") continue;
 
-        if (
-          part.type === "tool-approval-response" &&
-          typeof part.approvalId === "string"
-        ) {
+        if (part.type === "tool-approval-response" && typeof part.approvalId === "string") {
           const toolPart = toolByApprovalId.get(part.approvalId);
           if (!toolPart) continue;
 
           toolPart.approval = {
             id: part.approvalId,
-            approved:
-              typeof part.approved === "boolean" ? part.approved : undefined,
+            approved: typeof part.approved === "boolean" ? part.approved : undefined,
             reason: typeof part.reason === "string" ? part.reason : undefined,
           };
 
@@ -419,15 +381,11 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
           continue;
         }
 
-        if (
-          part.type === "tool-result" &&
-          typeof part.toolCallId === "string"
-        ) {
+        if (part.type === "tool-result" && typeof part.toolCallId === "string") {
           const toolPart = upsertToolPart({
             index: i,
             toolCallId: part.toolCallId,
-            toolName:
-              typeof part.toolName === "string" ? part.toolName : undefined,
+            toolName: typeof part.toolName === "string" ? part.toolName : undefined,
           });
           const parsedOutput = decodeToolOutput(part.output ?? part.result);
           toolPart.state = parsedOutput.state;
@@ -446,9 +404,7 @@ export function toHistoryUIMessages(history: any[]): UIMessage[] {
   return messages;
 }
 
-export function extractPendingApprovals(
-  messages: UIMessage[],
-): ApprovalRequestPart[] {
+export function extractPendingApprovals(messages: UIMessage[]): ApprovalRequestPart[] {
   const approvals: ApprovalRequestPart[] = [];
   const seen = new Set<string>();
 

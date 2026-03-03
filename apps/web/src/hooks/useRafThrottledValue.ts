@@ -1,6 +1,6 @@
-'use client';
+"use client";
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from "react";
 
 /**
  * useRafThrottledValue 的实现原理（requestAnimationFrame + 时间门限节流）：

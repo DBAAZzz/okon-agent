@@ -1,7 +1,7 @@
-import 'server-only';
-import { getAgentBaseUrl } from './env';
+import "server-only";
+import { getAgentBaseUrl } from "./env";
 
-const METHODS_WITHOUT_BODY = new Set(['GET', 'HEAD']);
+const METHODS_WITHOUT_BODY = new Set(["GET", "HEAD"]);
 
 function buildUpstreamUrl(request: Request, upstreamPath: string): URL {
   const incomingUrl = new URL(request.url);
@@ -12,9 +12,9 @@ function buildUpstreamUrl(request: Request, upstreamPath: string): URL {
 
 function forwardHeaders(request: Request): Headers {
   const headers = new Headers(request.headers);
-  headers.delete('host');
-  headers.delete('connection');
-  headers.delete('content-length');
+  headers.delete("host");
+  headers.delete("connection");
+  headers.delete("content-length");
   return headers;
 }
 
@@ -28,8 +28,8 @@ export async function proxyToAgent(request: Request, upstreamPath: string): Prom
     method,
     headers: forwardHeaders(request),
     body,
-    redirect: 'manual',
-    cache: 'no-store',
+    redirect: "manual",
+    cache: "no-store",
   });
 
   return new Response(upstreamResponse.body, {

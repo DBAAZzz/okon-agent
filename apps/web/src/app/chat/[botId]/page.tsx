@@ -1,7 +1,7 @@
-import type { Metadata } from 'next';
-import { notFound } from 'next/navigation';
-import { BotSessionWorkspace } from '@/components/BotSessionWorkspace';
-import { getBotById } from '@/lib/server/bot-queries';
+import type { Metadata } from "next";
+import { notFound } from "next/navigation";
+import { BotSessionWorkspace } from "@/components/BotSessionWorkspace";
+import { getBotById } from "@/lib/server/bot-queries";
 
 type Props = {
   params: Promise<{
@@ -20,16 +20,16 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 
   if (!botId) {
     return {
-      title: 'Bot Not Found',
-      alternates: { canonical: '/chat' },
+      title: "Bot Not Found",
+      alternates: { canonical: "/chat" },
     };
   }
 
   const bot = await getBotById(botId);
   if (!bot) {
     return {
-      title: 'Bot Not Found',
-      alternates: { canonical: '/chat' },
+      title: "Bot Not Found",
+      alternates: { canonical: "/chat" },
     };
   }
 

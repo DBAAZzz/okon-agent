@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import type { ApprovalRequestPart } from '@okon/shared';
+import type { ApprovalRequestPart } from "@okon/shared";
 
 export function ApprovalRequest({
   approvals,
   onApprove,
-  onDeny
+  onDeny,
 }: {
   approvals: ApprovalRequestPart[];
   onApprove: (approvalId: string) => void;

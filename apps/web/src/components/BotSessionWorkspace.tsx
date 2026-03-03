@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ChatInterface } from '@/components/ChatInterface';
-import { SessionSidebar } from '@/components/SessionSidebar';
-import { useBots } from '@/hooks/useBots';
-import type { BotRecord } from '@/types/api';
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { ChatInterface } from "@/components/ChatInterface";
+import { SessionSidebar } from "@/components/SessionSidebar";
+import { useBots } from "@/hooks/useBots";
+import type { BotRecord } from "@/types/api";
 
 type Props = {
   botId: number;
@@ -61,9 +61,11 @@ export function BotSessionWorkspace({ botId, initialBot }: Props) {
           <header className="shrink-0 border-b border-[var(--line-soft)] bg-white/62 px-4 py-3 backdrop-blur-sm md:px-6">
             <div className="flex items-center justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--ink-2)]">Current Bot</div>
+                <div className="text-[11px] uppercase tracking-[0.22em] text-[var(--ink-2)]">
+                  Current Bot
+                </div>
                 <div className="truncate text-sm font-semibold text-[var(--ink-1)]">
-                  {bot ? `${bot.name} (${bot.model})` : 'Loading...'}
+                  {bot ? `${bot.name} (${bot.model})` : "Loading..."}
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -96,7 +98,9 @@ export function BotSessionWorkspace({ botId, initialBot }: Props) {
               <div className="h-full flex items-center justify-center px-6">
                 <div className="max-w-md text-center rise-in">
                   <p className="text-3xl text-[var(--ink-1)]">Session Workspace</p>
-                  <p className="mt-3 text-sm text-[var(--ink-2)]">请从左侧选择会话，或新建会话开始聊天。</p>
+                  <p className="mt-3 text-sm text-[var(--ink-2)]">
+                    请从左侧选择会话，或新建会话开始聊天。
+                  </p>
                 </div>
               </div>
             )}

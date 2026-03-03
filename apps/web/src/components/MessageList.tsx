@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { memo, useEffect, useRef } from 'react';
-import type { ReactNode } from 'react';
-import ReactMarkdown from 'react-markdown';
-import type { ChatMessage, ToolDetail } from '../types/chat';
+import { memo, useEffect, useRef } from "react";
+import type { ReactNode } from "react";
+import ReactMarkdown from "react-markdown";
+import type { ChatMessage, ToolDetail } from "../types/chat";
 
 function formatValue(value: unknown): string {
   try {
@@ -15,36 +15,29 @@ function formatValue(value: unknown): string {
 
 function toStateLabel(state: string): string {
   switch (state) {
-    case 'input-streaming':
-      return '参数生成中';
-    case 'input-available':
-      return '参数已就绪';
-    case 'approval-requested':
-      return '等待审批';
-    case 'approval-responded':
-      return '审批已提交';
-    case 'output-available':
-      return '执行成功';
-    case 'output-error':
-      return '执行失败';
-    case 'output-denied':
-      return '已拒绝';
+    case "input-streaming":
+      return "参数生成中";
+    case "input-available":
+      return "参数已就绪";
+    case "approval-requested":
+      return "等待审批";
+    case "approval-responded":
+      return "审批已提交";
+    case "output-available":
+      return "执行成功";
+    case "output-error":
+      return "执行失败";
+    case "output-denied":
+      return "已拒绝";
     default:
       return state;
   }
 }
 
-function isToolApprovalEqual(
-  left: ToolDetail['approval'],
-  right: ToolDetail['approval'],
-): boolean {
+function isToolApprovalEqual(left: ToolDetail["approval"], right: ToolDetail["approval"]): boolean {
   if (!left && !right) return true;
   if (!left || !right) return false;
-  return (
-    left.id === right.id &&
-    left.approved === right.approved &&
-    left.reason === right.reason
-  );
+  return left.id === right.id && left.approved === right.approved && left.reason === right.reason;
 }
 
 function isToolDetailEqual(left: ToolDetail, right: ToolDetail): boolean {
@@ -91,24 +84,22 @@ const MessageItem = memo(
   function MessageItem({ message, index }: MessageItemProps) {
     return (
       <div
-        className={`rise-in flex ${
-          message.role === 'user' ? 'justify-end' : 'justify-start'
-        }`}
+        className={`rise-in flex ${message.role === "user" ? "justify-end" : "justify-start"}`}
         style={{ animationDelay: `${index * 20}ms` }}
       >
         <div
           className={`max-w-[80%] md:max-w-[70%] rounded-2xl px-4 py-3 border shadow-[0_18px_26px_-24px_rgba(16,30,51,0.6)] ${
-            message.role === 'user'
-              ? 'bg-[linear-gradient(135deg,#0f766e_0%,#115e59_100%)] text-white border-[#0f766ecc]'
-              : 'bg-white/88 text-[var(--ink-1)] border-[var(--line-soft)]'
+            message.role === "user"
+              ? "bg-[linear-gradient(135deg,#0f766e_0%,#115e59_100%)] text-white border-[#0f766ecc]"
+              : "bg-white/88 text-[var(--ink-1)] border-[var(--line-soft)]"
           }`}
         >
           <div className="text-[11px] font-semibold mb-1.5 tracking-wide opacity-75">
-            {message.role === 'user' ? '你' : 'AI'}
+            {message.role === "user" ? "你" : "AI"}
           </div>
           <div className="break-words text-[15px] leading-relaxed">
             {message.content ? (
-              message.role === 'assistant' ? (
+              message.role === "assistant" ? (
                 <div className="space-y-2 [&_a]:underline [&_a]:underline-offset-2 [&_a]:decoration-[#0f766e7a] [&_code]:rounded [&_code]:bg-[#f2eee2] [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em] [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:space-y-1 [&_pre]:overflow-x-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:border-[var(--line-soft)] [&_pre]:bg-[#f9f6ef] [&_pre]:p-2 [&_pre_code]:bg-transparent [&_pre_code]:p-0 [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:space-y-1">
                   <ReactMarkdown>{message.content}</ReactMarkdown>
                 </div>
@@ -124,7 +115,7 @@ const MessageItem = memo(
               <span className="font-semibold">思考:</span> {message.reasoning}
             </div>
           ) : null}
-          {message.role === 'assistant' && message.tools && message.tools.length > 0 ? (
+          {message.role === "assistant" && message.tools && message.tools.length > 0 ? (
             <details className="mt-3 rounded-xl border border-[#0f766e2f] bg-[#0f766e0d] p-2">
               <summary className="cursor-pointer text-xs font-semibold text-[var(--ink-2)] select-none">
                 工具详情 ({message.tools.length})
@@ -144,13 +135,13 @@ const MessageItem = memo(
 
                     {tool.approval ? (
                       <div className="mt-1 text-[11px] text-[var(--ink-2)]">
-                        审批:{' '}
+                        审批:{" "}
                         {tool.approval.approved === true
-                          ? '已批准'
+                          ? "已批准"
                           : tool.approval.approved === false
-                            ? '已拒绝'
-                            : '待处理'}
-                        {tool.approval.reason ? ` (${tool.approval.reason})` : ''}
+                            ? "已拒绝"
+                            : "待处理"}
+                        {tool.approval.reason ? ` (${tool.approval.reason})` : ""}
                       </div>
                     ) : null}
 
@@ -190,22 +181,15 @@ const MessageItem = memo(
       </div>
     );
   },
-  (prev, next) =>
-    prev.index === next.index && isChatMessageEqual(prev.message, next.message),
+  (prev, next) => prev.index === next.index && isChatMessageEqual(prev.message, next.message),
 );
 
-export function MessageList({
-  messages,
-  header,
-}: {
-  messages: ChatMessage[];
-  header?: ReactNode;
-}) {
+export function MessageList({ messages, header }: { messages: ChatMessage[]; header?: ReactNode }) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when messages change
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
   return (

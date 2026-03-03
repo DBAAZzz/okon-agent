@@ -3,10 +3,7 @@ import { trpc } from "@/lib/trpc";
 import type { UIMessage } from "ai";
 import { toHistoryUIMessages } from "@/lib/chat-transformers";
 
-export function useChatHistory(
-  sessionId: number,
-  setMessages: (messages: UIMessage[]) => void,
-) {
+export function useChatHistory(sessionId: number, setMessages: (messages: UIMessage[]) => void) {
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {

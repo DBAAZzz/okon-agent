@@ -1,7 +1,7 @@
-import { proxyToAgent } from '@/lib/server/proxy';
+import { proxyToAgent } from "@/lib/server/proxy";
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type RouteContext = {
   params: Promise<{ trpc: string }>;

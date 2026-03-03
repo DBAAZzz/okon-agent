@@ -1,7 +1,7 @@
-import { proxyToAgent } from '@/lib/server/proxy';
+import { proxyToAgent } from "@/lib/server/proxy";
 
-export const runtime = 'nodejs';
-export const dynamic = 'force-dynamic';
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 type RouteContext = {
   params: Promise<{ path: string[] }>;
@@ -9,7 +9,7 @@ type RouteContext = {
 
 async function handle(request: Request, context: RouteContext): Promise<Response> {
   const { path } = await context.params;
-  return proxyToAgent(request, `/api/knowledge-base/${path.join('/')}`);
+  return proxyToAgent(request, `/api/knowledge-base/${path.join("/")}`);
 }
 
 export async function GET(request: Request, context: RouteContext): Promise<Response> {

@@ -13,7 +13,6 @@ out
 .env*.local
 
 # IDE
-.vscode
 .idea
 .DS_Store
 

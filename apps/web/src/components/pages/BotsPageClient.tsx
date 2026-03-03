@@ -1,16 +1,10 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useCallback, useState } from 'react';
-import { trpc } from '@/lib/trpc';
-import type { BotRecord } from '@/types/api';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@okon/ui';
+import Link from "next/link";
+import { useCallback, useState } from "react";
+import { trpc } from "@/lib/trpc";
+import type { BotRecord } from "@/types/api";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@okon/ui";
 
 type ProviderConfig = {
   label: string;
@@ -20,23 +14,23 @@ type ProviderConfig = {
 
 const PROVIDERS: Record<string, ProviderConfig> = {
   deepseek: {
-    label: 'DeepSeek',
-    defaultBaseURL: 'https://api.deepseek.com/v1',
-    models: ['deepseek-chat', 'deepseek-reasoner'],
+    label: "DeepSeek",
+    defaultBaseURL: "https://api.deepseek.com/v1",
+    models: ["deepseek-chat", "deepseek-reasoner"],
   },
   openai: {
-    label: 'OpenAI',
-    defaultBaseURL: 'https://api.openai.com/v1',
-    models: ['gpt-4o', 'gpt-4o-mini', 'o3-mini'],
+    label: "OpenAI",
+    defaultBaseURL: "https://api.openai.com/v1",
+    models: ["gpt-4o", "gpt-4o-mini", "o3-mini"],
   },
   ollama: {
-    label: 'Ollama',
-    defaultBaseURL: 'http://localhost:11434/v1',
-    models: ['llama3.2', 'qwen2.5', 'mistral'],
+    label: "Ollama",
+    defaultBaseURL: "http://localhost:11434/v1",
+    models: ["llama3.2", "qwen2.5", "mistral"],
   },
   other: {
-    label: '自定义',
-    defaultBaseURL: '',
+    label: "自定义",
+    defaultBaseURL: "",
     models: [],
   },
 };
@@ -44,12 +38,12 @@ const PROVIDERS: Record<string, ProviderConfig> = {
 const PROVIDER_KEYS = Object.keys(PROVIDERS);
 
 const EMPTY_FORM = {
-  name: '',
-  provider: 'deepseek',
-  model: 'deepseek-chat',
-  baseURL: 'https://api.deepseek.com/v1',
-  apiKey: '',
-  systemPrompt: '',
+  name: "",
+  provider: "deepseek",
+  model: "deepseek-chat",
+  baseURL: "https://api.deepseek.com/v1",
+  apiKey: "",
+  systemPrompt: "",
 };
 
 type Props = {
@@ -59,10 +53,10 @@ type Props = {
 export function BotsPageClient({ initialBots }: Props) {
   const [bots, setBots] = useState<BotRecord[]>(initialBots);
   const [form, setForm] = useState(EMPTY_FORM);
-  const [customModel, setCustomModel] = useState('');
+  const [customModel, setCustomModel] = useState("");
   const [isCustomModel, setIsCustomModel] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState("");
 
   const loadBots = useCallback(async () => {
     try {
@@ -76,34 +70,43 @@ export function BotsPageClient({ initialBots }: Props) {
   const handleProviderChange = (newProvider: string) => {
     const config = PROVIDERS[newProvider];
     setIsCustomModel(false);
-    setCustomModel('');
-    setForm(p => ({
+    setCustomModel("");
+    setForm((p) => ({
       ...p,
       provider: newProvider,
-      model: config.models[0] ?? '',
+      model: config.models[0] ?? "",
       baseURL: config.defaultBaseURL,
     }));
   };
 
   const handleModelSelect = (value: string) => {
-    if (value === '__custom__') {
+    if (value === "__custom__") {
       setIsCustomModel(true);
-      setForm(p => ({ ...p, model: '' }));
+      setForm((p) => ({ ...p, model: "" }));
     } else {
       setIsCustomModel(false);
-      setCustomModel('');
-      setForm(p => ({ ...p, model: value }));
+      setCustomModel("");
+      setForm((p) => ({ ...p, model: value }));
     }
   };
 
   const finalModel = isCustomModel ? customModel : form.model;
 
   const handleCreate = async () => {
-    if (!form.name.trim()) { setStatus('请填写 Bot 名称'); return; }
-    if (!finalModel.trim()) { setStatus('请填写模型名称'); return; }
-    if (!form.apiKey.trim()) { setStatus('请填写 API Key'); return; }
+    if (!form.name.trim()) {
+      setStatus("请填写 Bot 名称");
+      return;
+    }
+    if (!finalModel.trim()) {
+      setStatus("请填写模型名称");
+      return;
+    }
+    if (!form.apiKey.trim()) {
+      setStatus("请填写 API Key");
+      return;
+    }
     setSaving(true);
-    setStatus('');
+    setStatus("");
     try {
       await trpc.bot.create.mutate({
         name: form.name.trim(),
@@ -115,8 +118,8 @@ export function BotsPageClient({ initialBots }: Props) {
       });
       setForm(EMPTY_FORM);
       setIsCustomModel(false);
-      setCustomModel('');
-      setStatus('创建成功');
+      setCustomModel("");
+      setStatus("创建成功");
       await loadBots();
     } catch (err) {
       setStatus(`创建失败: ${String(err)}`);
@@ -128,7 +131,7 @@ export function BotsPageClient({ initialBots }: Props) {
   const handleDelete = async (id: number) => {
     try {
       await trpc.bot.delete.mutate({ id });
-      setBots(prev => prev.filter(b => b.id !== id));
+      setBots((prev) => prev.filter((b) => b.id !== id));
     } catch (err) {
       setStatus(`删除失败: ${String(err)}`);
     }
@@ -142,9 +145,7 @@ export function BotsPageClient({ initialBots }: Props) {
         <div className="flex items-center justify-between gap-3">
           <div>
             <h1 className="text-3xl text-[var(--ink-1)]">Bot 管理</h1>
-            <p className="mt-2 text-sm text-[var(--ink-2)]">
-              创建 Bot，在新建会话时选择绑定。
-            </p>
+            <p className="mt-2 text-sm text-[var(--ink-2)]">创建 Bot，在新建会话时选择绑定。</p>
           </div>
           <div className="flex items-center gap-2">
             <Link
@@ -170,7 +171,7 @@ export function BotsPageClient({ initialBots }: Props) {
             <span className="mb-1 block text-sm text-[var(--ink-2)]">名称</span>
             <input
               value={form.name}
-              onChange={e => setForm(p => ({ ...p, name: e.target.value }))}
+              onChange={(e) => setForm((p) => ({ ...p, name: e.target.value }))}
               placeholder="我的助手"
               className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
               disabled={saving}
@@ -199,7 +200,7 @@ export function BotsPageClient({ initialBots }: Props) {
               {currentProviderConfig.models.length > 0 ? (
                 <>
                   <Select
-                    value={isCustomModel ? '__custom__' : form.model}
+                    value={isCustomModel ? "__custom__" : form.model}
                     onValueChange={handleModelSelect}
                     disabled={saving}
                   >
@@ -218,7 +219,7 @@ export function BotsPageClient({ initialBots }: Props) {
                   {isCustomModel && (
                     <input
                       value={customModel}
-                      onChange={e => setCustomModel(e.target.value)}
+                      onChange={(e) => setCustomModel(e.target.value)}
                       placeholder="输入模型名称"
                       className="mt-2 w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
                       disabled={saving}
@@ -229,7 +230,7 @@ export function BotsPageClient({ initialBots }: Props) {
               ) : (
                 <input
                   value={form.model}
-                  onChange={e => setForm(p => ({ ...p, model: e.target.value }))}
+                  onChange={(e) => setForm((p) => ({ ...p, model: e.target.value }))}
                   placeholder="输入模型名称"
                   className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
                   disabled={saving}
@@ -245,7 +246,7 @@ export function BotsPageClient({ initialBots }: Props) {
               </span>
               <input
                 value={form.baseURL}
-                onChange={e => setForm(p => ({ ...p, baseURL: e.target.value }))}
+                onChange={(e) => setForm((p) => ({ ...p, baseURL: e.target.value }))}
                 placeholder="https://api.openai.com/v1"
                 className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
                 disabled={saving}
@@ -259,7 +260,7 @@ export function BotsPageClient({ initialBots }: Props) {
               <input
                 type="password"
                 value={form.apiKey}
-                onChange={e => setForm(p => ({ ...p, apiKey: e.target.value }))}
+                onChange={(e) => setForm((p) => ({ ...p, apiKey: e.target.value }))}
                 placeholder="sk-..."
                 className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)]"
                 disabled={saving}
@@ -268,10 +269,12 @@ export function BotsPageClient({ initialBots }: Props) {
           </div>
 
           <label className="block">
-            <span className="mb-1 block text-sm text-[var(--ink-2)]">System Prompt <span className="text-[var(--ink-3)]">（留空使用默认）</span></span>
+            <span className="mb-1 block text-sm text-[var(--ink-2)]">
+              System Prompt <span className="text-[var(--ink-3)]">（留空使用默认）</span>
+            </span>
             <textarea
               value={form.systemPrompt}
-              onChange={e => setForm(p => ({ ...p, systemPrompt: e.target.value }))}
+              onChange={(e) => setForm((p) => ({ ...p, systemPrompt: e.target.value }))}
               placeholder="你是一个专业的助手..."
               rows={4}
               className="w-full rounded-xl border border-[var(--line-soft)] bg-white px-3 py-2 text-sm outline-none focus:border-[var(--brand)] resize-none"
@@ -284,7 +287,7 @@ export function BotsPageClient({ initialBots }: Props) {
             disabled={saving}
             className="rounded-xl bg-[var(--brand)] px-4 py-2 text-sm text-white hover:bg-[var(--brand-strong)] disabled:opacity-50 transition"
           >
-            {saving ? '创建中...' : '创建 Bot'}
+            {saving ? "创建中..." : "创建 Bot"}
           </button>
         </section>
 
@@ -292,8 +295,11 @@ export function BotsPageClient({ initialBots }: Props) {
         {bots.length > 0 && (
           <section className="mt-5 space-y-3">
             <h2 className="text-sm uppercase tracking-widest text-[var(--ink-2)]">已有 Bots</h2>
-            {bots.map(bot => (
-              <div key={bot.id} className="rounded-2xl border border-[var(--line-soft)] bg-white/70 px-4 py-3 flex items-start justify-between gap-3">
+            {bots.map((bot) => (
+              <div
+                key={bot.id}
+                className="rounded-2xl border border-[var(--line-soft)] bg-white/70 px-4 py-3 flex items-start justify-between gap-3"
+              >
                 <div className="min-w-0 space-y-0.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-[var(--ink-1)]">{bot.name}</span>
@@ -301,10 +307,17 @@ export function BotsPageClient({ initialBots }: Props) {
                       {PROVIDERS[bot.provider]?.label ?? bot.provider} / {bot.model}
                     </span>
                     {bot.apiKey && (
-                      <span className="rounded-full bg-[#d1fae52b] px-2 py-0.5 text-xs text-[#065f46] shrink-0">自定义 Key</span>
+                      <span className="rounded-full bg-[#d1fae52b] px-2 py-0.5 text-xs text-[#065f46] shrink-0">
+                        自定义 Key
+                      </span>
                     )}
                     {bot.baseURL && (
-                      <span className="rounded-full bg-[#ede9fe2b] px-2 py-0.5 text-xs text-[#4c1d95] shrink-0 truncate max-w-[160px]" title={bot.baseURL}>{bot.baseURL}</span>
+                      <span
+                        className="rounded-full bg-[#ede9fe2b] px-2 py-0.5 text-xs text-[#4c1d95] shrink-0 truncate max-w-[160px]"
+                        title={bot.baseURL}
+                      >
+                        {bot.baseURL}
+                      </span>
                     )}
                   </div>
                   {bot.systemPrompt && (

@@ -1,4 +1,4 @@
-import type { BotRecord, SessionRecord } from './api';
+import type { BotRecord, SessionRecord } from "./api";
 
 export type ToolDetail = {
   toolCallId: string;

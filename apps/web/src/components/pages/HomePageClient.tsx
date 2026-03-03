@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useMemo, useState } from 'react';
+import Link from "next/link";
+import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
 import {
   Badge,
   Button,
@@ -13,13 +13,13 @@ import {
   CardTitle,
   Input,
   Separator,
-} from '@okon/ui';
-import type { BotRecord } from '@/types/api';
+} from "@okon/ui";
+import type { BotRecord } from "@/types/api";
 
 const PROVIDER_LABEL: Record<string, string> = {
-  deepseek: 'DeepSeek',
-  openai: 'OpenAI',
-  ollama: 'Ollama',
+  deepseek: "DeepSeek",
+  openai: "OpenAI",
+  ollama: "Ollama",
 };
 
 type Props = {
@@ -28,7 +28,7 @@ type Props = {
 
 export function HomePageClient({ initialBots }: Props) {
   const router = useRouter();
-  const [keyword, setKeyword] = useState('');
+  const [keyword, setKeyword] = useState("");
 
   const filteredBots = useMemo(() => {
     const normalized = keyword.trim().toLowerCase();
@@ -61,13 +61,24 @@ export function HomePageClient({ initialBots }: Props) {
                 </CardDescription>
               </div>
               <div className="flex items-center gap-2">
-                <Button asChild variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)]">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-[var(--line-soft)] text-[var(--ink-2)]"
+                >
                   <Link href="/knowledge-bases">知识库</Link>
                 </Button>
-                <Button asChild variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)]">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-[var(--line-soft)] text-[var(--ink-2)]"
+                >
                   <Link href="/bots">管理 Bot</Link>
                 </Button>
-                <Button asChild className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]">
+                <Button
+                  asChild
+                  className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
+                >
                   <Link href="/bots">新建 Bot</Link>
                 </Button>
               </div>
@@ -78,15 +89,25 @@ export function HomePageClient({ initialBots }: Props) {
             <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="rounded-2xl border border-[var(--line-soft)] bg-white/75 p-4">
                 <div className="text-xs uppercase tracking-[0.18em] text-[var(--ink-2)]">Bots</div>
-                <div className="mt-2 text-2xl font-semibold text-[var(--ink-1)]">{initialBots.length}</div>
+                <div className="mt-2 text-2xl font-semibold text-[var(--ink-1)]">
+                  {initialBots.length}
+                </div>
               </div>
               <div className="rounded-2xl border border-[var(--line-soft)] bg-white/75 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-[var(--ink-2)]">Providers</div>
-                <div className="mt-2 text-2xl font-semibold text-[var(--ink-1)]">{providerCount}</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-[var(--ink-2)]">
+                  Providers
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-[var(--ink-1)]">
+                  {providerCount}
+                </div>
               </div>
               <div className="rounded-2xl border border-[var(--line-soft)] bg-white/75 p-4">
-                <div className="text-xs uppercase tracking-[0.18em] text-[var(--ink-2)]">Ready To Chat</div>
-                <div className="mt-2 text-2xl font-semibold text-[var(--ink-1)]">{filteredBots.length}</div>
+                <div className="text-xs uppercase tracking-[0.18em] text-[var(--ink-2)]">
+                  Ready To Chat
+                </div>
+                <div className="mt-2 text-2xl font-semibold text-[var(--ink-1)]">
+                  {filteredBots.length}
+                </div>
               </div>
             </div>
 
@@ -125,7 +146,7 @@ export function HomePageClient({ initialBots }: Props) {
                 tabIndex={0}
                 onClick={() => router.push(`/chat/${bot.id}`)}
                 onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
+                  if (event.key === "Enter" || event.key === " ") {
                     event.preventDefault();
                     router.push(`/chat/${bot.id}`);
                   }
@@ -135,23 +156,38 @@ export function HomePageClient({ initialBots }: Props) {
                 <CardContent className="p-4">
                   <div className="flex items-start justify-between gap-4">
                     <div className="min-w-0">
-                      <div className="truncate text-lg font-semibold text-[var(--ink-1)]">{bot.name}</div>
+                      <div className="truncate text-lg font-semibold text-[var(--ink-1)]">
+                        {bot.name}
+                      </div>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <Badge variant="secondary" className="bg-[#e7f6f4] text-[#0f5f5b]">
                           {PROVIDER_LABEL[bot.provider] ?? bot.provider}
                         </Badge>
-                        <Badge variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)]">
+                        <Badge
+                          variant="outline"
+                          className="border-[var(--line-soft)] text-[var(--ink-2)]"
+                        >
                           {bot.model}
                         </Badge>
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      <Button asChild variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)]">
-                        <Link href={`/bots/${bot.id}/edit`} onClick={(event) => event.stopPropagation()}>
+                      <Button
+                        asChild
+                        variant="outline"
+                        className="border-[var(--line-soft)] text-[var(--ink-2)]"
+                      >
+                        <Link
+                          href={`/bots/${bot.id}/edit`}
+                          onClick={(event) => event.stopPropagation()}
+                        >
                           编辑
                         </Link>
                       </Button>
-                      <Button asChild className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]">
+                      <Button
+                        asChild
+                        className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
+                      >
                         <Link href={`/chat/${bot.id}`} onClick={(event) => event.stopPropagation()}>
                           进入会话
                         </Link>

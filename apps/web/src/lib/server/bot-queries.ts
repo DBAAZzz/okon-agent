@@ -1,6 +1,6 @@
-import 'server-only';
-import { cache } from 'react';
-import { createServerTrpcClient } from './trpc-client';
+import "server-only";
+import { cache } from "react";
+import { createServerTrpcClient } from "./trpc-client";
 
 export const getBots = cache(async () => {
   const trpc = createServerTrpcClient();
