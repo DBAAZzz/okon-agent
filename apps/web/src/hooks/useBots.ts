@@ -11,7 +11,7 @@ export function useBots(options: UseBotsOptions = {}) {
   const [isLoading, setIsLoading] = useState(!(options.initialBots && options.initialBots.length > 0));
   const [error, setError] = useState<unknown | null>(null);
 
-  const loadBots = useCallback(async () => {
+  const refreshBots = useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -26,8 +26,8 @@ export function useBots(options: UseBotsOptions = {}) {
   }, []);
 
   useEffect(() => {
-    loadBots();
-  }, [loadBots]);
+    refreshBots();
+  }, [refreshBots]);
 
-  return { bots, error, isLoading };
+  return { bots, error, isLoading, refreshBots };
 }

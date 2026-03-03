@@ -20,7 +20,7 @@ import {
 } from '@okon/ui';
 import { trpc } from '@/lib/trpc';
 import { useBots } from '@/hooks/useBots';
-import type { BotRecord, ChannelRecord, KnowledgeBaseRecord } from '@/types/api';
+import type { BotRecord, KnowledgeBaseRecord } from '@/types/api';
 
 type Props = {
   botId: number;
@@ -41,6 +41,14 @@ type FeishuFormState = {
   appId: string;
   appSecret: string;
   enabled: boolean;
+};
+
+type ChannelConfigItem = {
+  id: number;
+  platform: string;
+  name: string;
+  enabled: boolean;
+  config: unknown;
 };
 
 const DEFAULT_BASIC_FORM: BasicFormState = {
@@ -76,11 +84,11 @@ function errorMessage(error: unknown): string {
 }
 
 export function BotEditorWorkspace({ botId, initialBot }: Props) {
-  const { bots, isLoading } = useBots({ initialBots: [initialBot] });
+  const { bots, isLoading, refreshBots } = useBots({ initialBots: [initialBot] });
 
   const [basicForm, setBasicForm] = useState<BasicFormState>(DEFAULT_BASIC_FORM);
   const [feishuForm, setFeishuForm] = useState<FeishuFormState>(DEFAULT_FEISHU_FORM);
-  const [channelList, setChannelList] = useState<ChannelRecord[]>([]);
+  const [channelList, setChannelList] = useState<ChannelConfigItem[]>([]);
   const [knowledgeBases, setKnowledgeBases] = useState<KnowledgeBaseRecord[]>([]);
   const [boundKnowledgeBaseIds, setBoundKnowledgeBaseIds] = useState<number[]>([]);
 
@@ -89,6 +97,7 @@ export function BotEditorWorkspace({ botId, initialBot }: Props) {
   const [feishuDeleting, setFeishuDeleting] = useState(false);
   const [knowledgeLoading, setKnowledgeLoading] = useState(false);
   const [knowledgeMutatingId, setKnowledgeMutatingId] = useState<number | null>(null);
+  const [basicSaving, setBasicSaving] = useState(false);
   const [status, setStatus] = useState('');
 
   const liveBot = useMemo(() => bots.find((item) => item.id === botId) ?? null, [bots, botId]);
@@ -101,8 +110,14 @@ export function BotEditorWorkspace({ botId, initialBot }: Props) {
   const loadChannelConfigs = useCallback(async () => {
     setFeishuLoading(true);
     try {
-      const rows = await trpc.channel.list.query({ botId });
-      setChannelList(rows);
+      const rows = await trpc.channel.list.query({ botId }) as ChannelConfigItem[];
+      setChannelList(rows.map((row) => ({
+        id: row.id,
+        platform: row.platform,
+        name: row.name,
+        enabled: row.enabled,
+        config: row.config,
+      })));
     } catch (error) {
       setStatus(`加载飞书配置失败: ${errorMessage(error)}`);
     } finally {
@@ -161,8 +176,45 @@ export function BotEditorWorkspace({ botId, initialBot }: Props) {
     });
   }, [feishuConfig]);
 
-  const handleMockSave = () => {
-    setStatus('已保存 基本信息（前端占位）。后续接入 API 后可真正持久化。');
+  const handleBasicSave = async () => {
+    const name = basicForm.name.trim();
+    const provider = basicForm.provider.trim();
+    const model = basicForm.model.trim();
+    const apiKey = basicForm.apiKey.trim();
+
+    if (!name || !provider || !model || !apiKey) {
+      setStatus('请完整填写 Bot 名称、Provider、Model、API Key。');
+      return;
+    }
+
+    setBasicSaving(true);
+    setStatus('');
+    try {
+      const updated = await trpc.bot.update.mutate({
+        id: botId,
+        name,
+        provider,
+        model,
+        apiKey,
+        baseURL: basicForm.baseURL,
+        systemPrompt: basicForm.systemPrompt,
+      });
+
+      setBasicForm({
+        name: updated.name ?? '',
+        provider: updated.provider ?? 'deepseek',
+        model: updated.model ?? '',
+        baseURL: updated.baseURL ?? '',
+        apiKey: updated.apiKey ?? '',
+        systemPrompt: updated.systemPrompt ?? '',
+      });
+      setStatus('Bot 基本信息已保存。');
+      await refreshBots();
+    } catch (error) {
+      setStatus(`保存基本信息失败: ${errorMessage(error)}`);
+    } finally {
+      setBasicSaving(false);
+    }
   };
 
   const handleFeishuSave = async () => {
@@ -355,8 +407,12 @@ export function BotEditorWorkspace({ botId, initialBot }: Props) {
                   <Button variant="outline" className="border-[var(--line-soft)] text-[var(--ink-2)]" onClick={() => setBasicForm(DEFAULT_BASIC_FORM)}>
                     重置
                   </Button>
-                  <Button className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]" onClick={handleMockSave}>
-                    保存基本信息
+                  <Button
+                    className="bg-[var(--brand)] text-white hover:bg-[var(--brand-strong)]"
+                    onClick={() => void handleBasicSave()}
+                    disabled={basicSaving}
+                  >
+                    {basicSaving ? '保存中...' : '保存基本信息'}
                   </Button>
                 </div>
               </CardContent>

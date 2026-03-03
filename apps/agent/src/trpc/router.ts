@@ -258,6 +258,36 @@ export const appRouter = router({
         return ctx.req.server.prisma.bot.create({ data: input });
       }),
 
+    // 更新 Bot
+    update: publicProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        name: z.string().min(1),
+        provider: z.string().min(1),
+        model: z.string().min(1),
+        baseURL: z.string().optional(),
+        apiKey: z.string().min(1, 'apiKey is required'),
+        systemPrompt: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const normalizeNullableString = (value?: string): string | null => {
+          const trimmed = value?.trim();
+          return trimmed ? trimmed : null;
+        };
+
+        return ctx.req.server.prisma.bot.update({
+          where: { id: input.id },
+          data: {
+            name: input.name.trim(),
+            provider: input.provider.trim(),
+            model: input.model.trim(),
+            apiKey: input.apiKey.trim(),
+            baseURL: normalizeNullableString(input.baseURL),
+            systemPrompt: normalizeNullableString(input.systemPrompt),
+          },
+        });
+      }),
+
     // 删除 Bot
     delete: publicProcedure
       .input(z.object({ id: z.number() }))
