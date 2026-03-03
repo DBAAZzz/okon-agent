@@ -16,7 +16,7 @@ export function useChatHistory(
       try {
         const { history } = await trpc.chat.getHistory.query({ sessionId });
         if (cancelled) return;
-        setMessages(toHistoryUIMessages(history as any[]));
+        setMessages(toHistoryUIMessages(history));
       } catch (err) {
         console.error("Failed to load history:", err);
       } finally {

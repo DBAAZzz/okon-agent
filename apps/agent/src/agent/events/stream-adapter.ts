@@ -78,8 +78,8 @@ export async function* adaptStream(
           type: 'done',
           totalUsage: chunk.totalUsage
             ? {
-                promptTokens: chunk.totalUsage.promptTokens ?? 0,
-                completionTokens: chunk.totalUsage.completionTokens ?? 0,
+                promptTokens: chunk.totalUsage.inputTokens ?? 0,
+                completionTokens: chunk.totalUsage.outputTokens ?? 0,
               }
             : undefined,
         }

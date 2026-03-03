@@ -1,4 +1,3 @@
-import type { ModelMessage } from 'ai'
 import { createLogger } from '@okon/shared'
 import { runAgent, finalizeStream } from '../agent/gateway.js'
 import { adaptStream } from '../agent/events/index.js'
@@ -21,26 +20,12 @@ function serializeError(error: unknown): unknown {
   return error
 }
 
-function extractAssistantText(messages: ModelMessage[]): string {
-  const textParts: string[] = []
-
-  for (const message of messages) {
-    if (message.role !== 'assistant' || !Array.isArray(message.content)) continue
-    for (const part of message.content) {
-      if (part.type === 'text' && part.text) {
-        textParts.push(part.text)
-      }
-    }
-  }
-
-  return textParts.join('\n') || '（无响应）'
-}
-
 export interface ChannelManager {
   startAll(): Promise<void>
   startOne(configId: number, platform: string, config: Record<string, any>, botId: number): Promise<void>
   stopOne(configId: number): Promise<void>
   stopAll(): Promise<void>
+  sendMessage(configId: number, externalChatId: string, text: string): Promise<void>
 }
 
 export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
@@ -120,7 +105,11 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
       if (!session?.bot) {
         throw new Error(`Session ${sessionId} has no bot configured`)
       }
-      const agentStream = await runAgent(sessionId, msg.text, { historyLimit: 0, bot: session.bot, knowledgeStore })
+      const agentStream = await runAgent(sessionId, msg.text, {
+        historyLimit: 0,
+        bot: session.bot,
+        knowledgeStore,
+      })
       replyStream = await adapter.createReplyStream?.(msg.externalChatId)
 
       if (replyStream) {
@@ -143,22 +132,24 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
           throw new Error(streamErrorMessage)
         }
 
-        let replyText = streamedText.trim()
-        if (!replyText) {
-          const response = await agentStream.result.response
-          replyText = extractAssistantText(response.messages as ModelMessage[])
-        }
-
         await finalizeStream(sessionId, agentStream)
-        await replyStream.complete(replyText)
+        await replyStream.complete(streamedText.trim() || '（无响应）')
         logger.info('channel 消息流式处理完成', { configId, sessionId })
         return
       }
 
-      const response = await agentStream.result.response
-      const replyText = extractAssistantText(response.messages as ModelMessage[])
+      // 非流式：消费 fullStream 收集文本后一次性发送
+      let replyText = ''
+      for await (const event of adaptStream(agentStream.result.fullStream)) {
+        if (event.type === 'text_delta' && event.delta) {
+          replyText += event.delta
+        }
+        if (event.type === 'error') {
+          throw new Error(event.message || 'stream error')
+        }
+      }
       await finalizeStream(sessionId, agentStream)
-      await adapter.sendReply(msg.externalChatId, replyText)
+      await adapter.sendReply(msg.externalChatId, replyText.trim() || '（无响应）')
       logger.info('channel 消息处理完成', { configId, sessionId })
     } catch (err) {
       logger.error('channel 消息处理失败', { configId, error: serializeError(err) })
@@ -218,11 +209,20 @@ export function createChannelManager(prisma: AppPrismaClient): ChannelManager {
     return null
   }
 
+  async function sendMessage(configId: number, externalChatId: string, text: string): Promise<void> {
+    const entry = adapters.get(configId)
+    if (!entry) {
+      throw new Error(`channel configId=${configId} 未运行，无法发送消息`)
+    }
+    await entry.adapter.sendMessage(externalChatId, text)
+  }
+
   return {
     startAll,
     startOne,
     stopOne,
     stopAll,
+    sendMessage,
   }
 }
 
@@ -239,6 +239,9 @@ function createNotInitializedManager(): ChannelManager {
       throw error
     },
     async stopAll() {
+      throw error
+    },
+    async sendMessage() {
       throw error
     },
   }

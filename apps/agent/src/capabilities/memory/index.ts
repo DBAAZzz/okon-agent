@@ -1,12 +1,20 @@
-import type { QdrantClient } from '@qdrant/js-client-rest'
-import { createMemoryStore, type MemoryStore } from './memory-store.js'
+import { createFileMemoryStore, type FileMemoryStore } from './file-memory-store.js'
 
-export type { MemoryPayload, MemoryFilter, MemorySearchResult } from './types.js'
+export type {
+  MemoryPayload,
+  MemoryFilter,
+  MemorySearchResult,
+  MemoryAction,
+  MemoryCategory,
+  MemoryPriority,
+} from './types.js'
 export type { MemoryStore } from './memory-store.js'
+export type { FileMemoryStore } from './file-memory-store.js'
+export { extractMemories, type MemoryExtractorModelConfig } from './memory-extractor.js'
 
-export let memoryStore: MemoryStore
+export let fileMemoryStore: FileMemoryStore
 
-export function initMemory(client: QdrantClient) {
-  memoryStore = createMemoryStore(client)
-  return memoryStore
+export function initMemory() {
+  fileMemoryStore = createFileMemoryStore()
+  return fileMemoryStore
 }

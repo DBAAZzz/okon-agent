@@ -1,6 +1,6 @@
 import type { ModelMessage, ToolApprovalResponse } from 'ai';
 import type { ApprovalRequestPart } from '@okon/shared';
-import type { PrismaClient } from '@prisma/client';
+import { Prisma, type PrismaClient } from '@prisma/client';
 import { createLogger } from '@okon/shared';
 
 const logger = createLogger('session-manager');
@@ -109,39 +109,46 @@ export class SessionManager {
     return session;
   }
 
-  async getHistory(sessionId: number, limit = 20, windowMinutes = 24 * 60): Promise<ModelMessage[]> {
-    if (limit <= 0) {
-      return [];
-    }
-
-    const since = new Date(Date.now() - windowMinutes * 60_000);
-    const fetchLimit = Math.max(limit * 5, 100);
-    const rows = await this.prisma.message.findMany({
-      where: { sessionId, createdAt: { gte: since } },
-      orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
-      take: fetchLimit,
+  async getHistory(sessionId: number): Promise<ModelMessage[]> {
+    const latestSummary = await this.prisma.compactionSummary.findFirst({
+      where: { sessionId },
+      orderBy: { createdAt: 'desc' },
     });
 
-    const chronological = rows.reverse().map((m) => m.content as unknown as ModelMessage);
-    const sanitized = sanitizeHistoryForProvider(chronological);
-    const sliced =
-      sanitized.messages.length > limit
-        ? sanitized.messages.slice(-limit)
-        : sanitized.messages;
-    const finalSanitized = sanitizeHistoryForProvider(sliced);
+    const rows = await this.prisma.message.findMany({
+      where: {
+        sessionId,
+        compactedAt: null,
+        ...(latestSummary ? { id: { gt: latestSummary.messageIdTo } } : {}),
+      },
+      orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+    });
 
-    const dropped = sanitized.droppedCount + finalSanitized.droppedCount;
-    if (dropped > 0) {
+    const chronological = rows.map((m) => m.content as unknown as ModelMessage);
+    const sanitized = sanitizeHistoryForProvider(chronological);
+
+    const messages: ModelMessage[] = [];
+    if (latestSummary) {
+      messages.push({
+        role: 'user',
+        content: `[Previous conversation summary]\n${latestSummary.summary}`,
+      } as ModelMessage);
+      messages.push({
+        role: 'assistant',
+        content: 'Understood. I have the context from our previous conversation. How can I help you next?',
+      } as ModelMessage);
+    }
+    messages.push(...sanitized.messages);
+
+    if (sanitized.droppedCount > 0) {
       logger.warn('检测到并忽略不合法工具消息，避免模型请求失败', {
         sessionId,
-        dropped,
-        requestedLimit: limit,
-        fetched: rows.length,
-        returned: finalSanitized.messages.length,
+        dropped: sanitized.droppedCount,
+        returned: messages.length,
       });
     }
 
-    return finalSanitized.messages;
+    return messages;
   }
 
   async addMessage(sessionId: number, message: ModelMessage): Promise<void> {
@@ -169,6 +176,139 @@ export class SessionManager {
       })),
     });
     logger.debug('添加多条消息到历史', { sessionId, count: messages.length });
+  }
+
+  /**
+   * 压缩指定 session 的旧消息
+   *
+   * @param sessionId - 会话 ID
+   * @param keepRecentCount - 保留最近 N 条消息不压缩
+   * @returns 是否执行了压缩
+   */
+  async compactOldMessages(
+    sessionId: number,
+    keepRecentCount: number,
+    generateSummary: (messages: ModelMessage[]) => Promise<{ summary: string; model: string }>,
+    estimateTokensFn: (text: string) => number,
+  ): Promise<boolean> {
+    const allMessages = await this.prisma.message.findMany({
+      where: { sessionId, compactedAt: null },
+      orderBy: { id: 'asc' },
+    });
+
+    if (allMessages.length <= keepRecentCount) {
+      return false;
+    }
+
+    const toCompact = allMessages.slice(0, allMessages.length - keepRecentCount);
+    if (toCompact.length === 0) return false;
+
+    const latestSummary = await this.prisma.compactionSummary.findFirst({
+      where: { sessionId },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (latestSummary && latestSummary.messageIdTo >= toCompact[toCompact.length - 1].id) {
+      return false;
+    }
+
+    const messagesForSummary = toCompact.map((m) => m.content as unknown as ModelMessage);
+
+    const inputForSummary: ModelMessage[] = [];
+    if (latestSummary) {
+      inputForSummary.push({
+        role: 'assistant',
+        content: `[Previous conversation summary]\n${latestSummary.summary}`,
+      } as ModelMessage);
+    }
+    inputForSummary.push(...messagesForSummary);
+
+    const { summary, model } = await generateSummary(inputForSummary);
+
+    const messageIdFrom = toCompact[0].id;
+    const messageIdTo = toCompact[toCompact.length - 1].id;
+    const now = new Date();
+
+    await this.prisma.$transaction([
+      this.prisma.message.updateMany({
+        where: {
+          sessionId,
+          id: { gte: messageIdFrom, lte: messageIdTo },
+        },
+        data: { compactedAt: now },
+      }),
+      this.prisma.compactionSummary.create({
+        data: {
+          sessionId,
+          summary,
+          messageIdFrom,
+          messageIdTo,
+          originalTokens: estimateTokensFn(
+            messagesForSummary
+              .map((m) =>
+                typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+              )
+              .join(''),
+          ),
+          summaryTokens: estimateTokensFn(summary),
+          model,
+        },
+      }),
+    ]);
+
+    logger.info('消息压缩完成', {
+      sessionId,
+      compactedCount: toCompact.length,
+      messageIdRange: `${messageIdFrom}-${messageIdTo}`,
+      summaryLength: summary.length,
+    });
+
+    return true;
+  }
+
+  /**
+   * 记录单次 agent 调用的 token 用量
+   * - runId 唯一键冲突时跳过，保证幂等
+   * - 失败不抛出，避免影响主对话流程
+   */
+  async recordTokenUsage(data: {
+    runId: string;
+    sessionId: number;
+    provider: string;
+    model: string;
+    inputTokens: number;
+    outputTokens: number;
+    totalTokens: number;
+    providerUsage?: unknown;
+  }): Promise<void> {
+    try {
+      await this.prisma.tokenUsage.create({
+        data: {
+          runId: data.runId,
+          sessionId: data.sessionId,
+          provider: data.provider,
+          model: data.model,
+          inputTokens: data.inputTokens,
+          outputTokens: data.outputTokens,
+          totalTokens: data.totalTokens,
+          providerUsage: data.providerUsage as any,
+        },
+      });
+      logger.debug('记录 token 用量', {
+        sessionId: data.sessionId,
+        inputTokens: data.inputTokens,
+        outputTokens: data.outputTokens,
+        totalTokens: data.totalTokens,
+      });
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === 'P2002'
+      ) {
+        logger.debug('token 用量记录已存在，跳过', { runId: data.runId });
+        return;
+      }
+      logger.warn('token 用量记录失败', err);
+    }
   }
 
   setPendingApprovals(sessionId: number, approvals: ApprovalRequestPart[]): void {
@@ -229,7 +369,7 @@ export class SessionManager {
     if (pendingMessages.length > 0) {
       await this.addMessages(sessionId, [...pendingMessages, toolMessage]);
     } else {
-      const history = await this.getHistory(sessionId, 120);
+      const history = await this.getHistory(sessionId);
       const hasRequest = hasApprovalRequestInHistory(history, approvalId);
 
       if (!hasRequest) {

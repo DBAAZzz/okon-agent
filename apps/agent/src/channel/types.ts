@@ -33,6 +33,9 @@ export interface ChannelAdapter {
   /** 向指定会话发送文本回复 */
   sendReply(externalChatId: string, text: string): Promise<void>
 
+  /** 主动推送消息到指定会话（非回复，由定时任务等场景触发） */
+  sendMessage(externalChatId: string, text: string): Promise<void>
+
   /** 断开连接 */
   stop(): Promise<void>
 }

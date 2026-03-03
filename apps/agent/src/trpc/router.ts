@@ -1,4 +1,5 @@
 import { initTRPC } from '@trpc/server';
+import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 import { z } from 'zod';
 import type { Context } from './context.js';
 import { sessionManager } from '../agent/session-manager.js';
@@ -12,13 +13,26 @@ export const publicProcedure = t.procedure;
 export const appRouter = router({
   session: router({
     // 获取会话列表（仅 web 来源）
-    list: publicProcedure.query(async ({ ctx }) => {
-      return ctx.req.server.prisma.session.findMany({
-        where: { source: 'web' },
-        orderBy: { updatedAt: 'desc' },
-        include: { bot: { select: { id: true, name: true } } },
-      });
-    }),
+    list: publicProcedure
+      .input(
+        z
+          .object({
+            botId: z.number().int().positive().optional(),
+          })
+          .optional(),
+      )
+      .query(async ({ ctx, input }) => {
+        const where = {
+          source: 'web',
+          ...(input?.botId ? { botId: input.botId } : {}),
+        };
+
+        return ctx.req.server.prisma.session.findMany({
+          where,
+          orderBy: { updatedAt: 'desc' },
+          include: { bot: { select: { id: true, name: true } } },
+        });
+      }),
 
     // 创建会话
     create: publicProcedure
@@ -51,6 +65,84 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return {
           history: await sessionManager.getHistory(input.sessionId)
+        };
+      }),
+  }),
+
+  compaction: router({
+    /** 获取 session 的所有 compaction 摘要 */
+    getSessionSummaries: publicProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        return ctx.req.server.prisma.compactionSummary.findMany({
+          where: { sessionId: input.sessionId },
+          orderBy: { createdAt: 'desc' },
+        });
+      }),
+
+    /** 获取某次 compaction 覆盖的原始消息 */
+    getCompactedMessages: publicProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        messageIdFrom: z.number(),
+        messageIdTo: z.number(),
+      }))
+      .query(async ({ input, ctx }) => {
+        return ctx.req.server.prisma.message.findMany({
+          where: {
+            sessionId: input.sessionId,
+            id: { gte: input.messageIdFrom, lte: input.messageIdTo },
+            compactedAt: { not: null },
+          },
+          orderBy: { id: 'asc' },
+        });
+      }),
+  }),
+
+  tokenUsage: router({
+    getSessionSummary: publicProcedure
+      .input(z.object({ sessionId: z.number() }))
+      .query(async ({ input, ctx }) => {
+        const agg = await ctx.req.server.prisma.tokenUsage.aggregate({
+          where: { sessionId: input.sessionId },
+          _sum: {
+            inputTokens: true,
+            outputTokens: true,
+            totalTokens: true,
+          },
+          _count: true,
+        });
+
+        return {
+          totalInputTokens: agg._sum.inputTokens ?? 0,
+          totalOutputTokens: agg._sum.outputTokens ?? 0,
+          totalTokens: agg._sum.totalTokens ?? 0,
+          requestCount: agg._count,
+        };
+      }),
+
+    getSessionDetails: publicProcedure
+      .input(z.object({
+        sessionId: z.number(),
+        cursor: z.number().optional(),
+        limit: z.number().min(1).max(100).default(20),
+      }))
+      .query(async ({ input, ctx }) => {
+        const items = await ctx.req.server.prisma.tokenUsage.findMany({
+          where: {
+            sessionId: input.sessionId,
+            ...(input.cursor ? { id: { lt: input.cursor } } : {}),
+          },
+          orderBy: { id: 'desc' },
+          take: input.limit + 1,
+        });
+
+        const hasMore = items.length > input.limit;
+        if (hasMore) items.pop();
+
+        return {
+          items,
+          nextCursor: hasMore ? items[items.length - 1]?.id : undefined,
         };
       }),
   }),
@@ -143,6 +235,15 @@ export const appRouter = router({
       return ctx.req.server.prisma.bot.findMany({ orderBy: { createdAt: 'desc' } });
     }),
 
+    // 获取单个 Bot
+    get: publicProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .query(async ({ input, ctx }) => {
+        return ctx.req.server.prisma.bot.findUnique({
+          where: { id: input.id },
+        });
+      }),
+
     // 创建 Bot
     create: publicProcedure
       .input(z.object({
@@ -155,6 +256,36 @@ export const appRouter = router({
       }))
       .mutation(async ({ input, ctx }) => {
         return ctx.req.server.prisma.bot.create({ data: input });
+      }),
+
+    // 更新 Bot
+    update: publicProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        name: z.string().min(1),
+        provider: z.string().min(1),
+        model: z.string().min(1),
+        baseURL: z.string().optional(),
+        apiKey: z.string().min(1, 'apiKey is required'),
+        systemPrompt: z.string().optional(),
+      }))
+      .mutation(async ({ input, ctx }) => {
+        const normalizeNullableString = (value?: string): string | null => {
+          const trimmed = value?.trim();
+          return trimmed ? trimmed : null;
+        };
+
+        return ctx.req.server.prisma.bot.update({
+          where: { id: input.id },
+          data: {
+            name: input.name.trim(),
+            provider: input.provider.trim(),
+            model: input.model.trim(),
+            apiKey: input.apiKey.trim(),
+            baseURL: normalizeNullableString(input.baseURL),
+            systemPrompt: normalizeNullableString(input.systemPrompt),
+          },
+        });
       }),
 
     // 删除 Bot
@@ -332,3 +463,5 @@ export const appRouter = router({
 });
 
 export type AppRouter = typeof appRouter;
+export type AppRouterInputs = inferRouterInputs<AppRouter>;
+export type AppRouterOutputs = inferRouterOutputs<AppRouter>;

@@ -1,88 +1,61 @@
 # okon-agent
 
-> 一个基于大语言模型的多 Agent 平台，支持知识库检索增强（RAG）、多渠道接入与工具调用。
+> 基于 Vercel AI SDK 的多 Bot Agent 平台，提供 Web 聊天、知识库 RAG、飞书接入、定时任务和文件化长期记忆能力。
 
-## 目录
+## 项目概览
 
-- [项目简介](#项目简介)
-- [技术栈](#技术栈)
-- [项目结构](#项目结构)
-- [快速开始](#快速开始)
-- [功能特性](#功能特性)
-- [架构设计](#架构设计)
-- [环境变量](#环境变量)
-- [开发指南](#开发指南)
+当前代码实现包含以下能力：
 
----
-
-## 项目简介
-
-核心能力包括：
-
-- **多 Bot 管理**：可创建多个 Bot，每个 Bot 独立配置模型、系统提示词与知识库
-- **RAG 知识检索**：支持 PDF、DOCX、TXT、Markdown 文档入库，混合向量检索（稠密 + 稀疏）提升召回质量
-- **多 Agent 协作**：主 Agent 可调度 `research`（联网搜索）、`planner`（任务拆解）等子 Agent
-- **多渠道接入**：抽象 Channel 层，内置飞书（Lark）集成，可扩展其他 IM 平台
-- **工具调用**：内置天气、IP 查询、网页搜索、网页抓取等工具，支持 MCP 扩展
-
----
+- 多 Bot 管理：创建/删除 Bot，按 Bot 配置模型、Provider、API Key、Base URL、System Prompt
+- 会话工作区：Bot 维度会话列表、流式对话、会话历史持久化
+- RAG 知识库：支持 `pdf/docx/txt/md` 上传、分块、去重、向量化、混合检索（dense+sparse）
+- 长期记忆：按 Bot 存储在文件系统，自动提取/更新/过期清理并注入提示词
+- 上下文压缩：超阈值自动 compact 历史消息，并在前端可查看摘要和原始压缩区间
+- Token 用量统计：按 session 聚合与分页明细查询
+- 子 Agent 协作：内置 `research`（搜索+抓取）和 `planner`（任务拆解）
+- 定时任务：支持 `cron` / `every` / `delay` / `at`，可触发 agent-turn 或外部通道发送
+- Channel 接入：已落地 Feishu 适配器（WebSocket 收消息、支持流式回复卡片）
 
 ## 技术栈
 
-| 层级 | 技术 |
-|------|------|
-| 后端框架 | [Fastify](https://fastify.dev/) + [tRPC](https://trpc.io/) |
-| 前端框架 | [Next.js 15](https://nextjs.org/) + [shadcn/ui](https://ui.shadcn.com/) |
-| AI SDK | [Vercel AI SDK](https://sdk.vercel.ai/) |
-| LLM 提供商 | DeepSeek、OpenAI、Ollama |
-| 向量数据库 | [Qdrant](https://qdrant.tech/) |
-| 关系数据库 | PostgreSQL（via [Prisma](https://www.prisma.io/)） |
-| 网页搜索 | [Tavily](https://tavily.com/) |
-| 飞书集成 | [@larksuiteoapi/node-sdk](https://github.com/larksuite/node-sdk) |
-| 包管理 | pnpm（Monorepo） |
+| 层 | 技术 |
+| --- | --- |
+| Monorepo | pnpm workspace |
+| 后端 | Fastify 5 + tRPC 11 + Prisma 7 |
+| 前端 | Next.js 15 + React 18 + Tailwind + shadcn/ui |
+| AI/Agent | Vercel AI SDK (`ToolLoopAgent`) |
+| 向量检索 | Qdrant + OpenAI Embeddings + BM25 sparse |
+| 数据库 | PostgreSQL |
+| 渠道 | 飞书（`@larksuiteoapi/node-sdk`） |
 
----
+## 仓库结构（当前）
 
-## 项目结构
-
-```
+```text
 okon-agent/
 ├── apps/
-│   ├── agent/          # 后端服务（Fastify + tRPC）
-│   │   ├── src/
-│   │   │   ├── agents/         # Agent 实现（主 Agent、子 Agent）
-│   │   │   ├── channels/       # 渠道接入层（飞书等）
-│   │   │   ├── knowledge/      # RAG 文档处理与检索
-│   │   │   ├── memory/         # 会话记忆管理
-│   │   │   ├── routers/        # tRPC 路由
-│   │   │   └── tools/          # 工具定义（搜索、天气等）
-│   │   └── prisma/             # 数据库 Schema 与迁移
-│   └── web/            # 前端应用（Next.js）
+│   ├── agent/                  # Fastify + tRPC + Agent 编排
+│   │   ├── src/agent/          # gateway / session / subagent / prompt / compaction
+│   │   ├── src/capabilities/   # knowledge / memory / embeddings / scheduler
+│   │   ├── src/channel/        # channel manager + feishu adapter
+│   │   ├── src/routes/         # /api/chat /api/knowledge-base/:kbId/upload /health
+│   │   ├── src/tools/          # bash/read/write/edit/web/scheduler tools
+│   │   └── prisma/             # schema 与 migrations
+│   └── web/                    # Next.js 前端（Bot、Session、知识库管理）
 ├── packages/
-│   ├── shared/         # 公共类型、日志工具
-│   └── ui/             # 共享 React 组件
-├── docs/               # 设计文档
-├── .env.example        # 环境变量模板
-└── pnpm-workspace.yaml
+│   ├── shared/                 # 公共类型与日志
+│   └── ui/                     # 共享 UI 组件
+├── docs/                       # 方案与设计文档
+└── .env.example
 ```
-
----
 
 ## 快速开始
 
-### 前置依赖
+### 1. 前置依赖
 
 - Node.js >= 20
 - pnpm >= 8
 - PostgreSQL
-- Qdrant（可用 Docker 启动）
-
-### 1. 克隆仓库
-
-```bash
-git clone https://github.com/your-org/okon-agent.git
-cd okon-agent
-```
+- Qdrant（可本地 Docker 启动）
 
 ### 2. 安装依赖
 
@@ -92,153 +65,143 @@ pnpm install
 
 ### 3. 配置环境变量
 
-```bash
-cp .env.example .env
-# 编辑 .env，填入必要的 API Key 和数据库连接信息
+创建 `apps/agent/.env`（可参考根目录 `.env.example`）：
+
+```env
+DATABASE_URL=postgresql://user:password@localhost:5432/okon-agent?schema=public
+QDRANT_URL=http://localhost:6333
+OPENAI_API_KEY=your_openai_api_key
+OPENAI_BASE_URL=
+TAVILY_API_KEY=
+BRAVE_API_KEY=
 ```
 
-### 4. 启动 Qdrant（Docker）
+可选创建 `apps/web/.env.local`：
+
+```env
+AGENT_BASE_URL=http://localhost:3001
+NEXT_PUBLIC_APP_BASE_URL=http://localhost:3000
+```
+
+### 4. 启动基础服务
 
 ```bash
 docker run -p 6333:6333 qdrant/qdrant
 ```
 
+并确保 PostgreSQL 可用。
+
 ### 5. 初始化数据库
 
 ```bash
-pnpm db:migrate
+pnpm --filter @okon/agent db:migrate
+pnpm --filter @okon/agent db:generate
 ```
 
-### 6. 启动开发服务
+### 6. 启动开发环境
 
 ```bash
 pnpm dev
 ```
 
-- 前端：http://localhost:3000
-- 后端：http://localhost:3001
+- Web: `http://localhost:3000`
+- Agent API: `http://localhost:3001`
 
----
+## 主要页面
 
-## 功能特性
+- `/`：Bot Workspace（选择 Bot 进入会话）
+- `/chat/[botId]`：Session 工作区（左侧会话列表 + 右侧聊天）
+- `/bots`：Bot 列表与创建
+- `/bots/[botId]/edit`：Bot 编辑台（飞书绑定、知识库绑定）
+- `/knowledge-bases`：知识库管理（文件上传、手动文档、检索测试）
+- `/embeddings`：向量检索调试页面
 
-### Bot 管理
+## 接口概览
 
-- 创建多个 Bot，独立配置模型（DeepSeek / OpenAI / Ollama）、API Key 与系统提示词
-- 每个 Bot 可绑定一个或多个知识库
+### HTTP Routes（Agent）
 
-### 知识库与 RAG
+- `GET /health`
+- `POST /api/chat`（UI Message Stream）
+- `GET /api/chat/stream`（SSE，兼容旧流式接口）
+- `GET /api/chat/continue`（审批后继续）
+- `POST /api/knowledge-base/:kbId/upload`
 
-- 支持上传 PDF、DOCX、TXT、Markdown 文件
-- 文档自动分块、向量化（OpenAI `text-embedding-3-small`）
-- 混合检索：稠密向量 + BM25 稀疏向量，提升中英文召回质量
-- 检索结果自动注入系统提示词
+### tRPC Router（`/trpc`）
 
-### 会话与记忆
+已实现路由组：
 
-- 多会话管理，历史消息持久化
-- 上下文长度自动裁剪，保证 Token 预算
-- 基于相关性的记忆召回（规划中）
+- `bot`
+- `session`
+- `chat`
+- `knowledgeBase`
+- `embeddings`
+- `tokenUsage`
+- `compaction`
+- `channel`
+- `approval`
 
-### 多 Agent 协作
+## Agent 工具（当前默认挂载）
 
-```
-用户输入
-  └── 主 Agent（ToolLoopAgent）
-        ├── research 子 Agent（联网搜索 + 网页抓取）
-        └── planner 子 Agent（复杂任务拆解）
-```
+- `bash`：执行 shell 命令（限制在 workspace 内）
+- `read`：文件读取（带行号、分页）
+- `write`：文件写入（原子写）
+- `edit`：基于 `oldString/newString` 的精确替换
+- `scheduleTask` / `listTasks` / `cancelTask`：定时任务管理
+- `research`：研究子代理（`webSearchTool + webFetchTool`）
+- `planner`：规划子代理（结构化步骤拆解）
 
-### 工具调用
+> `webSearchTool`、`webFetchTool` 作为 `research` 子代理工具使用，不直接挂在主代理工具列表。
 
-| 工具 | 说明 |
-|------|------|
-| `webSearch` | 通过 Tavily 联网搜索 |
-| `webFetch` | 抓取并解析网页内容 |
-| `weather` | 查询天气信息 |
-| `ipLookup` | IP 地理位置查询 |
+## 环境变量说明（按代码）
 
-支持通过 MCP（Model Context Protocol）扩展自定义工具。
+### Agent（`apps/agent`）
 
-### 渠道接入
+| 变量 | 必填 | 用途 |
+| --- | --- | --- |
+| `DATABASE_URL` | 是 | Prisma 连接 PostgreSQL |
+| `QDRANT_URL` | 建议 | Qdrant 地址，默认 `http://localhost:6333` |
+| `OPENAI_API_KEY` | 建议 | Embeddings（知识库向量化） |
+| `OPENAI_BASE_URL` | 否 | OpenAI 兼容 embedding 网关 |
+| `OPENAI_API_BASEURL` | 否 | 兼容旧别名 |
+| `TAVILY_API_KEY` | 否 | `research` 子代理联网搜索 |
+| `BRAVE_API_KEY` | 否 | 预留搜索 provider（当前未在 tool schema 暴露） |
+| `PORT` | 否 | Agent 端口，默认 `3001` |
+| `HOST` | 否 | Agent 监听地址，默认 `0.0.0.0` |
+| `MEMORY_DIR` | 否 | 长期记忆文件目录 |
+| `SCHEDULER_DIR` | 否 | 定时任务持久化目录 |
 
-- 内置飞书（Lark）集成：监听消息事件、自动回复
-- 抽象 Channel 层，可扩展 Slack、企业微信等平台
+### Web（`apps/web`）
 
----
+| 变量 | 必填 | 用途 |
+| --- | --- | --- |
+| `AGENT_BASE_URL` | 否 | Next Server 代理到 Agent 的上游地址 |
+| `NEXT_PUBLIC_APP_BASE_URL` | 否 | 前端应用基础地址 |
 
-## 架构设计
-
-详细设计文档见 [docs/](docs/) 目录：
-
-| 文档 | 内容 |
-|------|------|
-| [01-Agent 与 Tool Calling](docs/01-Agent%20与%20Tool%20Calling.md) | Agent 与工具调用基础 |
-| [02-ToolLoopAgent](docs/02-ToolLoopAgent.md) | 主 Agent 架构实现 |
-| [03-稀疏向量和稠密向量](docs/03-稀疏向量和稠密向量.md) | 混合检索原理 |
-| [05-记忆召回设计](docs/05-记忆召回设计.md) | 记忆系统设计 |
-| [06-网页搜索设计](docs/06-网页搜索设计.md) | Research 子 Agent 设计 |
-| [07-多Agent设计](docs/07-多Agent设计.md) | 多 Agent 协作架构 |
-| [08-Channel设计](docs/08-Channel设计.md) | 多渠道接入框架 |
-| [09-RAG设计](docs/09-RAG设计.md) | RAG 全流程设计 |
-
----
-
-## 环境变量
-
-| 变量 | 必填 | 说明 |
-|------|------|------|
-| `DATABASE_URL` | ✅ | PostgreSQL 连接字符串 |
-| `QDRANT_URL` | ✅ | Qdrant 服务地址 |
-| `OPENAI_API_KEY` | ✅ | 用于文本向量化（embedding） |
-| `OPENAI_BASE_URL` | ❌ | 自定义 OpenAI 兼容接口地址 |
-| `TAVILY_API_KEY` | ❌ | 联网搜索功能（webSearch 工具） |
-| `BRAVE_API_KEY` | ❌ | 备用搜索提供商 |
-
-Bot 级别的 LLM API Key 在前端界面的 Bot 设置中配置，不需要在 `.env` 中设置。
-
----
-
-## 开发指南
-
-### 常用命令
+## 常用命令
 
 ```bash
-# 启动全部服务
+# 启动全项目
 pnpm dev
 
-# 仅启动后端
+# 单独启动后端/前端
 pnpm dev:agent
-
-# 仅启动前端
 pnpm dev:web
 
-# 数据库迁移
-pnpm db:migrate
-
-# 打开 Prisma Studio（数据库可视化）
-pnpm db:studio
-
-# 全量构建
+# 构建与类型检查
 pnpm build
-
-# 类型检查
 pnpm typecheck
+
+# 数据库（agent 包内）
+pnpm --filter @okon/agent db:migrate
+pnpm --filter @okon/agent db:deploy
+pnpm --filter @okon/agent db:push
+pnpm --filter @okon/agent db:studio
 ```
 
-### 添加新工具
+## 现状说明
 
-1. 在 `apps/agent/src/tools/` 下新建工具文件
-2. 实现 `tool()` 定义（基于 Vercel AI SDK）
-3. 在主 Agent 的工具列表中注册
-
-### 添加新渠道
-
-1. 在 `apps/agent/src/channels/` 下实现 Channel 适配器
-2. 继承 Channel 抽象接口，实现消息收发逻辑
-3. 在渠道配置中注册
-
----
+- Tool 审批链路已实现（前后端均支持），但默认挂载工具中未显式启用 `needsApproval`。
+- Channel 平台目前仅实现 Feishu 适配器。
 
 ## License
 
